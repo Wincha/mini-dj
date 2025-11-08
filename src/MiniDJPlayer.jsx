@@ -7,7 +7,6 @@ export default function MiniDJMixer() {
   const engine = useMemo(() => new AudioEngine(), []);
 
   const [master, setMaster] = useState(1);
-  const [cross, setCross] = useState(0.5);
   const [volA, setVolA] = useState(1);
   const [volB, setVolB] = useState(1);
   const [eqA, setEqA] = useState({ gain: 0, high: 0, mid: 0, low: 0 });
@@ -39,10 +38,6 @@ export default function MiniDJMixer() {
   useEffect(() => {
     engine.setMaster(master);
   }, [engine, master]);
-
-  useEffect(() => {
-    engine.setCrossfader(cross);
-  }, [engine, cross]);
 
   useEffect(() => {
     engine.setDeckVolume("A", volA);
@@ -89,26 +84,8 @@ export default function MiniDJMixer() {
               Mini DJ Mixer
             </h1>
             <p className="text-sm text-neutral-400">
-              2 Decks · Crossfader · Volumen · Pitch estilo vinilo · Key Lock
-              (UI)
+              by Dj Wincha (Under construction)
             </p>
-          </div>
-          {/* Crossfader */}
-          <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 shadow-xl w-[360px]">
-            <div className="flex items-center justify-between text-xs text-neutral-400 mb-2">
-              <span>A</span>
-              <span>Crossfader</span>
-              <span>B</span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.001}
-              value={cross}
-              onChange={(e) => setCross(Number(e.target.value))}
-              className="w-full accent-white"
-            />
           </div>
         </header>
 

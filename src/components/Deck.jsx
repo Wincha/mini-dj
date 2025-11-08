@@ -428,7 +428,7 @@ export default function Deck({
               inverted={true}
             />
           </div>
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex flex-row items-center gap-2">
             <span className="text-xs text-neutral-400">Vol</span>
             <VerticalSlider
               min={0}
