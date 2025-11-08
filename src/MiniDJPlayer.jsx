@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AudioEngine } from "./audio/engine";
 import Deck from "./components/Deck";
 import CentralMeters from "./components/CentralMeters";

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import VerticalSlider from "./VerticalSlider";
 
 export default function CentralMeters({ engine, master, setMaster }) {
