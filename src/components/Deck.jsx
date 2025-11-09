@@ -1,7 +1,6 @@
 /* eslint-disable no-unused-vars */
 import { useEffect, useRef, useState, useMemo } from "react";
 import VerticalSlider from "./VerticalSlider";
-import Knob from "./Knob";
 import HorizontalSlider from "./HorizontalSlider";
 
 export default function Deck({
@@ -34,7 +33,6 @@ export default function Deck({
     const loop = () => {
       const el = audioRef.current;
       if (!el) return;
-      // actualiza tiempo desde el elemento
       setCurrent(el.currentTime || 0);
       if (!el.paused && tickerRunningRef.current) {
         rafRef.current = requestAnimationFrame(loop);
@@ -54,10 +52,9 @@ export default function Deck({
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [current, setCurrent] = useState(0);
-  // Bend (nudge) temporal: añade un % a pitch mientras se mantiene pulsado
   const [bendPct, setBendPct] = useState(0);
-  const bendHoldRef = useRef(false); // si el botón está pulsado
-  const bendRafRef = useRef(null); // animación de release
+  const bendHoldRef = useRef(false);
+  const bendRafRef = useRef(null);
 
   const livePitch = useMemo(() => pitchPct + bendPct, [pitchPct, bendPct]);
 
@@ -70,10 +67,8 @@ export default function Deck({
         !el.paused &&
         isPlaying
       ) {
-        // relanza el ticker al volver a pestaña
         startTicker();
       } else {
-        // opcional: parar cuando no visible
         stopTicker();
       }
     };
@@ -111,20 +106,6 @@ export default function Deck({
     [objectUrl]
   );
 
-  //   const formatTime = (t) => {
-  //     if (!Number.isFinite(t)) return "0:00";
-  //     const m = Math.floor(t / 60),
-  //       s = Math.floor(t % 60);
-  //     return `${m}:${s.toString().padStart(2, "0")}`;
-  //   };
-
-  //   const tick = () => {
-  //     const el = audioRef.current;
-  //     if (!el) return;
-  //     setCurrent(el.currentTime || 0);
-  //     if (!el.paused) rafRef.current = requestAnimationFrame(tick);
-  //   };
-
   const onFile = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -154,7 +135,7 @@ export default function Deck({
     try {
       await el.play();
       setIsPlaying(true);
-      startTicker(); // ← inicia ticker
+      startTicker();
     } catch (e) {
       console.error(e);
     }
@@ -165,7 +146,7 @@ export default function Deck({
     if (!el) return;
     el.pause();
     setIsPlaying(false);
-    stopTicker(); // ← para ticker
+    stopTicker();
   };
 
   const stop = () => {
@@ -175,7 +156,7 @@ export default function Deck({
     el.currentTime = 0;
     setCurrent(0);
     setIsPlaying(false);
-    stopTicker(); // ← para ticker
+    stopTicker();
   };
 
   const seek = (v) => {
@@ -183,7 +164,7 @@ export default function Deck({
     if (!el) return;
     const t = Number(v);
     el.currentTime = t;
-    setCurrent(t); // feedback instantáneo en UI
+    setCurrent(t);
   };
 
   // === Pitch/Tempo estilo vinilo (centralizado) ===
@@ -196,13 +177,12 @@ export default function Deck({
     // Cancela rampa anterior
     if (pitchRafRef.current) cancelAnimationFrame(pitchRafRef.current);
 
-    const DURATION_MS = 120; // rampa corta y suave
+    const DURATION_MS = 120;
     const startRate = el.playbackRate || 1;
     const start = performance.now();
 
     const step = (now) => {
       const t = Math.min(1, (now - start) / DURATION_MS);
-      // curva suave (easeInOut)
       const k = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
       el.playbackRate = startRate + (target - startRate) * k;
 
@@ -210,7 +190,7 @@ export default function Deck({
         pitchRafRef.current = requestAnimationFrame(step);
       } else {
         pitchRafRef.current = null;
-        el.playbackRate = target; // asegura el valor final exacto
+        el.playbackRate = target;
       }
     };
 
@@ -229,15 +209,13 @@ export default function Deck({
   const onRangeChange = (e) => {
     const r = Number(e.target.value);
     setPitchRange(side, r);
-    setPitchPct(side, Math.max(-r, Math.min(r, pitchPct))); // recortar al nuevo rango
+    setPitchPct(side, Math.max(-r, Math.min(r, pitchPct)));
   };
 
-  // Config del bend (puedes ajustar):
   const BEND_MAX = 2.0; // ±2% típico CDJ
   const BEND_RELEASE_MS = 120; // suelta rápido al dejar el botón
 
   function startBend(sign) {
-    // sign: +1 = más rápido (adelantar), -1 = más lento (retrasar)
     bendHoldRef.current = true;
     cancelAnimationFrame(bendRafRef.current);
     setBendPct(sign * BEND_MAX);
@@ -245,13 +223,12 @@ export default function Deck({
 
   function releaseBend() {
     bendHoldRef.current = false;
-    // animar de bendPct → 0 en BEND_RELEASE_MS
     const start = performance.now();
     const startVal = bendPct;
 
     const step = (now) => {
       const t = Math.min(1, (now - start) / BEND_RELEASE_MS);
-      const k = 1 - t; // ease-out lineal simple
+      const k = 1 - t;
       const v = startVal * k;
       setBendPct(v);
       if (t < 1 && !bendHoldRef.current) {
@@ -280,50 +257,6 @@ export default function Deck({
             {fileName || "Sin archivo"}
           </span>
         </header>
-
-        {/* Controles superiores: Gain/EQ (Knobs) */}
-        {/* <div className="grid grid-cols-4 gap-4">
-          <Knob
-            label="Gain"
-            min={-24}
-            max={+12}
-            step={0.5}
-            value={eq.gain}
-            onChange={(e) =>
-              setEq(side, { ...eq, gain: Number(e.target.value) })
-            }
-          />
-          <Knob
-            label="High"
-            min={-12}
-            max={+12}
-            step={0.5}
-            value={eq.high}
-            onChange={(e) =>
-              setEq(side, { ...eq, high: Number(e.target.value) })
-            }
-          />
-          <Knob
-            label="Mid"
-            min={-12}
-            max={+12}
-            step={0.5}
-            value={eq.mid}
-            onChange={(e) =>
-              setEq(side, { ...eq, mid: Number(e.target.value) })
-            }
-          />
-          <Knob
-            label="Low"
-            min={-12}
-            max={+12}
-            step={0.5}
-            value={eq.low}
-            onChange={(e) =>
-              setEq(side, { ...eq, low: Number(e.target.value) })
-            }
-          />
-        </div> */}
 
         {/* Archivo */}
         <label className="flex items-center gap-3">
@@ -407,7 +340,6 @@ export default function Deck({
               <option value={8}>±8%</option>
               <option value={16}>±16%</option>
               <option value={50}>±50%</option>
-              <option value={100}>±100%</option>
             </select>
           </div>
         </div>
@@ -427,19 +359,7 @@ export default function Deck({
               inverted={true}
             />
           </div>
-          <div className="flex flex-row items-center gap-2">
-            <span className="text-xs text-neutral-400">Vol</span>
-            <VerticalSlider
-              min={0}
-              max={1}
-              step={0.01}
-              value={vol}
-              onChange={(e) => onVolChange(side, Number(e.target.value))}
-              height={180}
-              width={28}
-            />
-            <VUBar engine={engine} side={side} />
-          </div>
+
         </div>
 
         <div className="flex items-center gap-2">
@@ -479,25 +399,6 @@ export default function Deck({
           crossOrigin="anonymous"
         />
       </div>
-    </div>
-  );
-}
-
-function VUBar({ engine, side }) {
-  const [lvl, setLvl] = useState(0);
-  useEffect(() => {
-    let timer;
-    const tick = () => setLvl(engine?.getRMS(side) ?? 0);
-    timer = setInterval(tick, 33);
-    return () => clearInterval(timer);
-  }, [engine, side]);
-  const h = Math.min(1, lvl * 1.7) * 100;
-  return (
-    <div className="w-3 h-40 bg-neutral-800 rounded relative overflow-hidden">
-      <div
-        className="absolute bottom-0 left-0 right-0 bg-emerald-400"
-        style={{ height: `${h}%` }}
-      />
     </div>
   );
 }

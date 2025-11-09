@@ -195,13 +195,13 @@ export class AudioEngine {
     return Math.sqrt(sum / arr.length);
   }
 
-  // Activa/desactiva AGC (modo C fuerte)
+  // Activa/desactiva AGC
   setMasterAutoLevel(enabled, opts = {}) {
     this._enableAGC = !!enabled;
     const {
       targetRMS = 0.22, // objetivo (≈ -12 a -10 dBFS relativo)
-      upRate = 0.008, // cuánto sube por tick (lento)
-      downRate = 0.03, // cuánto baja por tick (rápido)
+      upRate = 0.022, // cuánto sube por tick
+      downRate = 0.022, // cuánto baja por tick
       tickMs = 50, // 20 Hz
       minGain = 0.25, // -12 dB
       maxGain = 2.0,
@@ -221,9 +221,9 @@ export class AudioEngine {
       let next = cur;
       // Banda muerta del 10% para evitar bombeo
       if (rms > targetRMS * 1.1) {
-        next = cur * (1 - downRate); // baja rápido
+        next = cur * (1 - downRate);
       } else if (rms < targetRMS * 0.9) {
-        next = cur * (1 + upRate); // sube lento
+        next = cur * (1 + upRate);
       }
 
       // límites duros

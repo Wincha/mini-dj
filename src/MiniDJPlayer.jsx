@@ -77,19 +77,8 @@ export default function MiniDJMixer() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-neutral-950 text-neutral-100 p-6">
-      <div className="max-w-6xl mx-auto grid gap-6">
-        <header className="flex items-end justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Mini DJ Mixer
-            </h1>
-            <p className="text-sm text-neutral-400">
-              by Dj Wincha (Under construction)
-            </p>
-          </div>
-        </header>
-
+    <div className="min-h-screen w-screen bg-neutral-950 text-neutral-100 p-6">
+      <div className="max-w-screen max-w-screen mx-auto grid gap-6">
         {/* Panel central */}
         <CentralMeters engine={engine} master={master} setMaster={setMaster} />
 
@@ -112,7 +101,13 @@ export default function MiniDJMixer() {
             setKeyLock={setKeyLock}
             onAttachEl={onAttachEl}
           />
-          <Mixer engine={engine} eq={{eqA, eqB}} setEq={setEq}/>
+          <Mixer
+            engine={engine}
+            eq={{ A: eqA, B: eqB }}
+            setEq={setEq}
+            vol={{ A: volA, B: volB }}
+            onVolChange={onVolChange}
+          />
           <Deck
             title="Deck B"
             colorClass="from-fuchsia-500/20 to-transparent"
