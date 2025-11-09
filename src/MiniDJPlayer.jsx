@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AudioEngine } from "./audio/engine";
 import Deck from "./components/Deck";
 import CentralMeters from "./components/CentralMeters";
+import Mixer from "./components/Mixer";
 
 export default function MiniDJMixer() {
   const engine = useMemo(() => new AudioEngine(), []);
@@ -89,11 +90,11 @@ export default function MiniDJMixer() {
           </div>
         </header>
 
-        {/* Panel central: VU y master */}
+        {/* Panel central */}
         <CentralMeters engine={engine} master={master} setMaster={setMaster} />
 
         {/* Decks */}
-        <div className="grid lg:grid-cols-2 gap-6">
+        <div className="grid lg:grid-cols-3 gap-6">
           <Deck
             title="Deck A"
             colorClass="from-cyan-500/20 to-transparent"
@@ -111,6 +112,7 @@ export default function MiniDJMixer() {
             setKeyLock={setKeyLock}
             onAttachEl={onAttachEl}
           />
+          <Mixer engine={engine} eq={{eqA, eqB}} setEq={setEq}/>
           <Deck
             title="Deck B"
             colorClass="from-fuchsia-500/20 to-transparent"

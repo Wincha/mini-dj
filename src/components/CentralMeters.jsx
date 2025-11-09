@@ -1,14 +1,16 @@
+// eslint-disable-next-line no-unused-vars
 import { useEffect, useState } from "react";
-import VerticalSlider from "./VerticalSlider";
+import HorizontalSlider from "./HorizontalSlider";
 
+// eslint-disable-next-line no-unused-vars
 export default function CentralMeters({ engine, master, setMaster }) {
 //   const [a, setA] = useState(0),
 //     [b, setB] = useState(0);
-  const [cross, setCross] = useState(0.5);
+  // const [cross, setCross] = useState(0.5);
 
-  useEffect(() => {
-    engine.setCrossfader(cross);
-  }, [engine, cross]);
+  // useEffect(() => {
+  //   engine.setCrossfader(cross);
+  // }, [engine, cross]);
 
 //   useEffect(() => {
 //     let timer;
@@ -36,22 +38,14 @@ export default function CentralMeters({ engine, master, setMaster }) {
       </div> */}
       <div className="flex-1 flex justify-center">
         {/* Crossfader */}
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 shadow-xl w-[360px]">
+        {/* <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 shadow-xl w-[360px]">
           <div className="flex items-center justify-between text-xs text-neutral-400 mb-2">
             <span>A</span>
             <span>Crossfader</span>
             <span>B</span>
           </div>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.001}
-            value={cross}
-            onChange={(e) => setCross(Number(e.target.value))}
-            className="w-full accent-white"
-          />
-        </div>
+          <HorizontalSlider min={0} max={1} step={0.001} value={cross} onChange={(e) => setCross(Number(e.target.value))} />
+        </div> */}
       </div>
       {/* Crossfader visual (se gestiona en el contenedor) */}
       <div className="flex-2" />
@@ -69,7 +63,7 @@ export default function CentralMeters({ engine, master, setMaster }) {
       {/* Master volume (vertical) */}
       <div className="flex flex-col items-center gap-2 ml-6">
         <span className="text-xs text-neutral-400">Master</span>
-        <VerticalSlider
+        <HorizontalSlider
           min={0}
           max={1}
           step={0.01}

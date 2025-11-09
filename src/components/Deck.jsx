@@ -1,6 +1,8 @@
+/* eslint-disable no-unused-vars */
 import { useEffect, useRef, useState, useMemo } from "react";
 import VerticalSlider from "./VerticalSlider";
 import Knob from "./Knob";
+import HorizontalSlider from "./HorizontalSlider";
 
 export default function Deck({
   title,
@@ -21,7 +23,6 @@ export default function Deck({
 }) {
   const pitchRafRef = useRef(null);
   const audioRef = useRef(null);
-  // refs para ticker robusto
   const rafRef = useRef(null);
   const tickerRunningRef = useRef(false);
   const timeupdateHandlerRef = useRef(null);
@@ -110,12 +111,12 @@ export default function Deck({
     [objectUrl]
   );
 
-//   const formatTime = (t) => {
-//     if (!Number.isFinite(t)) return "0:00";
-//     const m = Math.floor(t / 60),
-//       s = Math.floor(t % 60);
-//     return `${m}:${s.toString().padStart(2, "0")}`;
-//   };
+  //   const formatTime = (t) => {
+  //     if (!Number.isFinite(t)) return "0:00";
+  //     const m = Math.floor(t / 60),
+  //       s = Math.floor(t % 60);
+  //     return `${m}:${s.toString().padStart(2, "0")}`;
+  //   };
 
   //   const tick = () => {
   //     const el = audioRef.current;
@@ -281,7 +282,7 @@ export default function Deck({
         </header>
 
         {/* Controles superiores: Gain/EQ (Knobs) */}
-        <div className="grid grid-cols-4 gap-4">
+        {/* <div className="grid grid-cols-4 gap-4">
           <Knob
             label="Gain"
             min={-24}
@@ -322,7 +323,7 @@ export default function Deck({
               setEq(side, { ...eq, low: Number(e.target.value) })
             }
           />
-        </div>
+        </div> */}
 
         {/* Archivo */}
         <label className="flex items-center gap-3">
@@ -350,14 +351,12 @@ export default function Deck({
             {keyLock && " · (Key Lock)"}
           </span>
         </div>
-        <input
-          type="range"
+        <HorizontalSlider
           min={0}
           max={Math.max(1, Math.floor(duration))}
           step={0.01}
           value={Number.isFinite(current) ? current : 0}
           onChange={(e) => seek(e.target.value)}
-          className="w-full accent-white"
           disabled={!objectUrl}
         />
 
