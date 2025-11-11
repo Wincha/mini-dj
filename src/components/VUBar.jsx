@@ -11,14 +11,14 @@ export default function VUBar({
   const peakTimeRef = useRef(0);
   const [peak, setPeak] = useState(0);
 
-  // parámetros del peak (ajústalos a tu gusto)
+  // parámetros del peak
   const peakHoldMs = 280; // tiempo que “se queda” en el pico
   const peakDecayPerSec = 0.9; // cuánto baja por segundo tras el hold (0.9 ≈ rápido)
   const attackAlpha = 0.7; // subida
   const releaseAlpha = 0.7; // bajada
 
   const [lvl, setLvl] = useState(0);
-  const smoothRef = useRef(0); // valor suavizado para “balística”
+  const smoothRef = useRef(0);
 
   useEffect(() => {
     let timer;
@@ -69,7 +69,7 @@ export default function VUBar({
     return () => clearInterval(timer);
   }, [engine, side]);
 
-  const HEADROOM = headroom; // ya lo usas
+  const HEADROOM = headroom;
   const pct = Math.max(0, Math.min(100, lvl * 100 * HEADROOM));
   const peakPct = Math.max(0, Math.min(100, peak * 100 * HEADROOM));
 
