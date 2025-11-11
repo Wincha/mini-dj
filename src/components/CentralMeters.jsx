@@ -1,6 +1,6 @@
 import HorizontalSlider from "./HorizontalSlider";
+import VUBar from "./VUBar";
 
-// eslint-disable-next-line no-unused-vars
 export default function CentralMeters({ engine, master, setMaster }) {
   return (
     <div className="flex items-center justify-between rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 shadow-xl flex gap-6">
@@ -14,8 +14,8 @@ export default function CentralMeters({ engine, master, setMaster }) {
           </p>
         </div>
       </header>
-      {/* Master volume (vertical) */}
-      <div className="flex flex-col items-center gap-2 ml-6">
+      {/* Master volume (horizontal) */}
+      <div className="flex flex-col gap-2 ml-6 w-full max-w-md">
         <span className="text-xs text-neutral-400">Master</span>
         <HorizontalSlider
           min={0}
@@ -23,7 +23,9 @@ export default function CentralMeters({ engine, master, setMaster }) {
           step={0.01}
           value={master}
           onChange={(e) => setMaster(Number(e.target.value))}
+          className="w-full" // si tu componente lo soporta
         />
+        <VUBar engine={engine} side="Both" direction="horizontal" />
       </div>
     </div>
   );

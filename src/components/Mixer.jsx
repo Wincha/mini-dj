@@ -1,14 +1,44 @@
 import { useState, useEffect } from "react";
 import HorizontalSlider from "./HorizontalSlider";
 import VerticalSlider from "./VerticalSlider";
+import VUBar from "./VUBar";
 import Knob from "./Knob";
 
 export default function Mixer({ engine, eq, setEq, vol, onVolChange }) {
   const [cross, setCross] = useState(0.5);
+  const [autoGain, setAutoGain] = useState({ A: false, B: false });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      ["A", "B"].forEach((side) => {
+        if (!autoGain[side]) return;
+
+        const rms = engine.getRMS(side);
+        const currentGain = eq[side].gain;
+
+        // Objetivo RMS aproximado
+        const target = 0.22;
+        const error = target - rms;
+
+        // Ajuste leve si hay diferencia notable
+        if (Math.abs(error) > 0.02) {
+          const deltaDb = error * 20; // ajuste proporcional
+          const newGain = Math.max(
+            -24,
+            Math.min(12, currentGain + deltaDb * 0.1)
+          );
+          setEq(side, { ...eq[side], gain: newGain });
+        }
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [autoGain, eq, engine, setEq]);
 
   useEffect(() => {
     engine.setCrossfader(cross);
   }, [engine, cross]);
+
   return (
     <div
       className={`rounded-2xl border border-neutral-400 bg-neutral-900/70 p-5 shadow-xl relative overflow-hidden`}
@@ -26,6 +56,16 @@ export default function Mixer({ engine, eq, setEq, vol, onVolChange }) {
                 setEq("A", { ...eq.A, gain: Number(e.target.value) })
               }
             />
+            <button
+              onClick={() => setAutoGain((prev) => ({ ...prev, A: !prev.A }))}
+              className={`mt-1 px-2 py-0.5 text-[10px] rounded ${
+                autoGain.A
+                  ? "bg-emerald-500/30 text-emerald-300 border border-emerald-600"
+                  : "bg-neutral-800 text-neutral-400 border border-neutral-700"
+              }`}
+            >
+              Auto
+            </button>
             <Knob
               label="High"
               min={-12}
@@ -92,6 +132,16 @@ export default function Mixer({ engine, eq, setEq, vol, onVolChange }) {
                 setEq("B", { ...eq.B, gain: Number(e.target.value) })
               }
             />
+            <button
+              onClick={() => setAutoGain((prev) => ({ ...prev, B: !prev.B }))}
+              className={`mt-1 px-2 py-0.5 text-[10px] rounded ${
+                autoGain.B
+                  ? "bg-emerald-500/30 text-emerald-300 border border-emerald-600"
+                  : "bg-neutral-800 text-neutral-400 border border-neutral-700"
+              }`}
+            >
+              Auto
+            </button>
             <Knob
               label="High"
               min={-12}
@@ -139,25 +189,6 @@ export default function Mixer({ engine, eq, setEq, vol, onVolChange }) {
           onChange={(e) => setCross(Number(e.target.value))}
         />
       </div>
-    </div>
-  );
-}
-
-function VUBar({ engine, side }) {
-  const [lvl, setLvl] = useState(0);
-  useEffect(() => {
-    let timer;
-    const tick = () => setLvl(engine?.getRMS(side) ?? 0);
-    timer = setInterval(tick, 33);
-    return () => clearInterval(timer);
-  }, [engine, side]);
-  const h = Math.min(1, lvl * 1.7) * 100;
-  return (
-    <div className="w-3 h-auto bg-neutral-800 rounded relative overflow-hidden">
-      <div
-        className="absolute bottom-0 left-0 right-0 bg-emerald-400"
-        style={{ height: `${h}%` }}
-      />
     </div>
   );
 }

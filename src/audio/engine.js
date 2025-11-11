@@ -3,16 +3,11 @@ export class AudioEngine {
     const AC = window.AudioContext || window.webkitAudioContext;
     this.ctx = new AC();
 
-    // Master
-    this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = 1;
-    this.masterGain.connect(this.ctx.destination);
-
-    // Master
+    // Master (único)
     this.masterGain = this.ctx.createGain();
     this.masterGain.gain.value = 1;
 
-    // === NUEVO: Trim de master y analizador del mix
+    // Trim de master (AGC fuerte) y analizador del mix
     this.masterTrim = this.ctx.createGain();
     this.masterTrim.gain.value = 1;
 
@@ -20,12 +15,10 @@ export class AudioEngine {
     this.mixAnalyser.fftSize = 1024;
     this.mixAnalyser.smoothingTimeConstant = 0.85;
 
-    // Conexiones de master
-    // (fan-out permitido: masterGain → analyser y → masterTrim)
+    // Ruteo final (sin duplicados, sin conexiones huérfanas):
+    // decks -> masterGain -> (tap a analyser) -> masterTrim -> destination
     this.masterGain.connect(this.mixAnalyser);
     this.masterGain.connect(this.masterTrim);
-
-    // Salida final
     this.masterTrim.connect(this.ctx.destination);
 
     const mkEQ = () => {
@@ -111,7 +104,6 @@ export class AudioEngine {
 
     deck.mediaEl = el;
     deck.media = this.ctx.createMediaElementSource(el);
-    // ANTES: deck.preGain
     deck.media.connect(deck.eqPreGain); // ← ahora entra por el bloque de EQ
   }
 
@@ -199,37 +191,44 @@ export class AudioEngine {
   setMasterAutoLevel(enabled, opts = {}) {
     this._enableAGC = !!enabled;
     const {
-      targetRMS = 0.22, // objetivo (≈ -12 a -10 dBFS relativo)
-      upRate = 0.022, // cuánto sube por tick
-      downRate = 0.022, // cuánto baja por tick
-      tickMs = 50, // 20 Hz
-      minGain = 0.25, // -12 dB
-      maxGain = 2.0,
+      targetRMS = 0.14, // objetivo alto
+      deadband = 0.01, // si estoy cerca, no toco
+      upRate = 0.06, // SUBE rápido
+      downRate = 0.001, // BAJA muy lento
+      tickMs = 50,
+      minGain = 0.05, // no caigas por debajo de X
+      maxGain = 2.5,
+      silenceGate = 0.02, // no subas en silencio
     } = opts;
-
-    if (this._agcTimer) {
-      clearInterval(this._agcTimer);
-      this._agcTimer = null;
-    }
-
-    if (!this._enableAGC) return;
 
     this._agcTimer = setInterval(() => {
       const rms = this._getMixRMS();
       const cur = this.masterTrim.gain.value;
-
       let next = cur;
-      // Banda muerta del 10% para evitar bombeo
-      if (rms > targetRMS * 1.1) {
-        next = cur * (1 - downRate);
-      } else if (rms < targetRMS * 0.9) {
-        next = cur * (1 + upRate);
+
+      if (rms < silenceGate) {
+        // En silencio: no bostear; leve drift hacia 1.0 si está muy bajo
+        next = cur < 1 ? cur * 1.002 : cur;
+      } else {
+        const hi = targetRMS * (1 + deadband);
+        const lo = targetRMS * (1 - deadband);
+
+        if (rms < lo) {
+          // Por debajo: sube rápido (proporcional al error)
+          const ratio = targetRMS / Math.max(1e-6, rms); // >1
+          const boost = Math.min(1.0, (ratio - 1) * 0.3); // suaviza
+          next = cur * (1 + Math.max(upRate, boost * upRate));
+        } else if (rms > hi) {
+          // Por encima: baja muy, muy lento
+          next = cur * (1 - downRate);
+        } else {
+          // Dentro de banda: tírate muy despacio hacia 1.0 si quedó por debajo
+          if (cur < 1.0) next = cur * 1.005;
+        }
       }
 
-      // límites duros
       next = Math.min(maxGain, Math.max(minGain, next));
 
-      // rampa corta y estable
       const now = this.ctx.currentTime;
       this.masterTrim.gain.cancelScheduledValues(now);
       this.masterTrim.gain.setValueAtTime(this.masterTrim.gain.value, now);

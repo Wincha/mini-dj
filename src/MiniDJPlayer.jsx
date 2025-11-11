@@ -24,15 +24,7 @@ export default function MiniDJMixer() {
   const [keyLockB, setKeyLockB] = useState(false);
 
   useEffect(() => {
-    // C = fuerte solo en master
-    engine.setMasterAutoLevel(true, {
-      targetRMS: 0.22, // puedes ajustar 0.20–0.25
-      upRate: 0.008,
-      downRate: 0.03,
-      tickMs: 50,
-      minGain: 0.25,
-      maxGain: 2.0,
-    });
+    engine.setMasterAutoLevel(true);
     return () => engine.setMasterAutoLevel(false);
   }, [engine]);
 
