@@ -146,10 +146,8 @@ export class AudioEngine {
   // Aplicar EQ por deck: {gain, low, mid, high} en dB
   setDeckEQ(which, { gain = 0, low = 0, mid = 0, high = 0 } = {}) {
     const d = which === "A" ? this.deckA : this.deckB;
-    const now = this.ctx.currentTime;
 
-    // === AUTO-TRIM SUAVE ===
-    // suma de boosts positivos
+    // === AUTO-TRIM SUAVE (mantenemos la idea, pero sin rampas) ===
     const boostSum = [low, mid, high].reduce(
       (acc, v) => acc + Math.max(0, v),
       0
@@ -159,12 +157,12 @@ export class AudioEngine {
     const effectiveGainDb = gain + trimDb;
 
     const target = this._dbToGain(effectiveGainDb);
-    const t = 0.03;
-    d.eqPreGain.gain.cancelScheduledValues(now);
-    d.eqPreGain.gain.setValueAtTime(d.eqPreGain.gain.value, now);
-    d.eqPreGain.gain.linearRampToValueAtTime(target, now + t);
 
-    // filtros EQ
+    // 👉 Cambio importante: nada de cancelScheduledValues ni linearRamp
+    // Ajuste directo, súper barato:
+    d.eqPreGain.gain.value = target;
+
+    // filtros EQ (esto ya era “gratis”)
     d.low.gain.value = low;
     d.mid.gain.value = mid;
     d.high.gain.value = high;
