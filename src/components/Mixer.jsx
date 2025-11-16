@@ -4,40 +4,41 @@ import VerticalSlider from "./VerticalSlider";
 import VUBar from "./VUBar";
 import Knob from "./Knob";
 
-export default function Mixer({ engine, eq, setEq, vol, onVolChange }) {
+export default function Mixer({ engine, eq, setEq, vol, onVolChange, deckAutoGain }) {
   const [cross, setCross] = useState(0.5);
-  const [autoGain, setAutoGain] = useState({ A: false, B: false });
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      ["A", "B"].forEach((side) => {
-        if (!autoGain[side]) return;
-
-        const rms = engine.getRMS(side);
-        const currentGain = eq[side].gain;
-
-        // Objetivo RMS aproximado
-        const target = 0.22;
-        const error = target - rms;
-
-        // Ajuste leve si hay diferencia notable
-        if (Math.abs(error) > 0.02) {
-          const deltaDb = error * 20; // ajuste proporcional
-          const newGain = Math.max(
-            -24,
-            Math.min(12, currentGain + deltaDb * 0.1)
-          );
-          setEq(side, { ...eq[side], gain: newGain });
-        }
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [autoGain, eq, engine, setEq]);
+  const [autoGainEnabled, setAutoGainEnabled] = useState({
+    A: false,
+    B: false,
+  });
 
   useEffect(() => {
     engine.setCrossfader(cross);
   }, [engine, cross]);
+
+  useEffect(() => {
+    ["A", "B"].forEach((side) => {
+      if (!autoGainEnabled[side]) return;
+      const gainDb = deckAutoGain[side];
+      if (gainDb == null) return;
+      if (eq[side].gain === gainDb) return;
+      setEq(side, { ...eq[side], gain: gainDb });
+    });
+  }, [autoGainEnabled, deckAutoGain, eq, setEq]);
+
+  function toggleAutoGain(side) {
+    setAutoGainEnabled((prev) => {
+      const next = !prev[side];
+
+      if (next) {
+        const gainDb = deckAutoGain[side];
+        if (gainDb != null) {
+          setEq(side, { ...eq[side], gain: gainDb });
+        }
+      }
+
+      return { ...prev, [side]: next };
+    });
+  }
 
   return (
     <div
@@ -57,11 +58,11 @@ export default function Mixer({ engine, eq, setEq, vol, onVolChange }) {
               }
             />
             <button
-              onClick={() => setAutoGain((prev) => ({ ...prev, A: !prev.A }))}
-              className={`mt-1 px-2 py-0.5 text-[10px] rounded ${
-                autoGain.A
-                  ? "bg-emerald-500/30 text-emerald-300 border border-emerald-600"
-                  : "bg-neutral-800 text-neutral-400 border border-neutral-700"
+              onClick={() => toggleAutoGain("A")}
+              className={`px-2 py-1 rounded text-xs border ${
+                autoGainEnabled.A
+                  ? "bg-emerald-500 text-black border-emerald-400"
+                  : "bg-neutral-800 text-neutral-200 border-neutral-700"
               }`}
             >
               Auto
@@ -133,11 +134,11 @@ export default function Mixer({ engine, eq, setEq, vol, onVolChange }) {
               }
             />
             <button
-              onClick={() => setAutoGain((prev) => ({ ...prev, B: !prev.B }))}
-              className={`mt-1 px-2 py-0.5 text-[10px] rounded ${
-                autoGain.B
-                  ? "bg-emerald-500/30 text-emerald-300 border border-emerald-600"
-                  : "bg-neutral-800 text-neutral-400 border border-neutral-700"
+              onClick={() => toggleAutoGain("B")}
+              className={`px-2 py-1 rounded text-xs border ${
+                autoGainEnabled.B
+                  ? "bg-emerald-500 text-black border-emerald-400"
+                  : "bg-neutral-800 text-neutral-200 border-neutral-700"
               }`}
             >
               Auto

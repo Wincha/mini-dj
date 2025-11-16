@@ -2,9 +2,9 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import VerticalSlider from "./VerticalSlider";
 import HorizontalSlider from "./HorizontalSlider";
 import WaveformCanvas from "./WaveformCanvas";
+import { analyzeTrackLoudness } from "../audio/utils";
 
 export default function Deck({
-  title,
   colorClass,
   engine,
   side,
@@ -15,6 +15,7 @@ export default function Deck({
   keyLock,
   setKeyLock,
   onAttachEl,
+  onAutoGainComputed,
 }) {
   const pitchRafRef = useRef(null);
   const audioRef = useRef(null);
@@ -24,29 +25,70 @@ export default function Deck({
   const [waveData, setWaveData] = useState(null);
   const [beats, setBeats] = useState([]);
 
-  const [zoom, setZoom] = useState(64); // zoom por defecto a 64
-  const [scroll, setScroll] = useState(0); // ventana al principio
+  const [zoom, setZoom] = useState(64);
+  const [scroll, setScroll] = useState(0);
 
-  // extrae la forma de onda y la guarda en waveData (array de amplitudes normalizadas)
+  // Seguimiento automático del playback
+  const [follow, setFollow] = useState(true);
+
   async function extractWaveform(file) {
     const arrayBuffer = await file.arrayBuffer();
     const audioBuffer = await engine.ctx.decodeAudioData(arrayBuffer);
-    const raw = audioBuffer.getChannelData(0);
-    const samples = 22000;
-    const blockSize = Math.floor(raw.length / samples);
+
+    // === 1) Waveform L+R → mono con resolución adaptativa ===
+    const ch0 = audioBuffer.getChannelData(0);
+    const hasStereo = audioBuffer.numberOfChannels > 1;
+    const ch1 = hasStereo ? audioBuffer.getChannelData(1) : null;
+
+    const duration = audioBuffer.duration; // en segundos
+    const targetPerSecond = 80; // columnas por segundo visibles
+    let samples = Math.floor(duration * targetPerSecond);
+    samples = Math.max(4000, Math.min(samples, 40000)); // clamp
+
+    const len = ch0.length;
+    const blockSize = Math.max(1, Math.floor(len / samples));
     const peaks = [];
 
     for (let i = 0; i < samples; i++) {
-      let sum = 0;
-      for (let j = 0; j < blockSize; j++) {
-        sum += Math.abs(raw[i * blockSize + j]);
+      const start = i * blockSize;
+      if (start >= len) break;
+      const end = i === samples - 1 ? len : Math.min(len, start + blockSize);
+
+      let acc = 0;
+      let count = 0;
+
+      for (let j = start; j < end; j++) {
+        const l = ch0[j];
+        const r = ch1 ? ch1[j] : l;
+        const mono = (l + r) * 0.5;
+        acc += Math.abs(mono);
+        count++;
       }
-      peaks.push(sum / blockSize);
+
+      peaks.push(count ? acc / count : 0);
     }
 
-    const max = Math.max(...peaks);
+    const max = Math.max(...peaks) || 1;
     const norm = peaks.map((v) => v / max);
     setWaveData(norm);
+
+    // === 2) Loudness medio usando MEDIANA por bloques ===
+    const { db: medianDb } = analyzeTrackLoudness(audioBuffer);
+
+    // Queremos un target MÁS ALTO que antes.
+    // Si antes usábamos -12 dBFS, por ejemplo pasa a -8 dBFS o -6 dBFS:
+    const targetDb = -8; // prueba -8, si lo quieres aún más arriba, -6
+
+    let gainDb = targetDb - medianDb;
+
+    // Limites para no hacer salvajadas
+    const MIN_GAIN_DB = -12; // cortar si ya viene muy caliente
+    const MAX_GAIN_DB = +9; // permitimos un poco más de boost
+    gainDb = Math.max(MIN_GAIN_DB, Math.min(MAX_GAIN_DB, gainDb));
+
+    if (typeof onAutoGainComputed === "function") {
+      onAutoGainComputed(side, gainDb);
+    }
   }
 
   async function detectBeats(file) {
@@ -93,6 +135,7 @@ export default function Deck({
 
   const livePitch = useMemo(() => pitchPct + bendPct, [pitchPct, bendPct]);
 
+  // listeners básicos del <audio>
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
@@ -112,17 +155,15 @@ export default function Deck({
     };
   }, []);
 
+  // conectar el mediaElement al engine
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
 
     onAttachEl(side, el);
 
-    // fallback: si RAF se pausa (cambio de pestaña, throttling), timeupdate nos mantiene vivos
     const onTimeUpdate = () => setCurrent(el.currentTime || 0);
-    const onEnded = () => {
-      setIsPlaying(false);
-    };
+    const onEnded = () => setIsPlaying(false);
 
     el.addEventListener("timeupdate", onTimeUpdate);
     el.addEventListener("ended", onEnded);
@@ -135,8 +176,11 @@ export default function Deck({
     };
   }, [onAttachEl, side]);
 
+  // limpiar URL de archivo
   useEffect(
-    () => () => objectUrl && URL.revokeObjectURL(objectUrl),
+    () => () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    },
     [objectUrl]
   );
 
@@ -158,6 +202,8 @@ export default function Deck({
     setIsPlaying(false);
     setCurrent(0);
     setDuration(0);
+    setScroll(0);
+    setFollow(true); // al cargar pista nueva, volvemos a seguir
   };
 
   const onLoaded = () => {
@@ -202,14 +248,12 @@ export default function Deck({
     setCurrent(t);
   };
 
-  // === Pitch/Tempo estilo vinilo (centralizado) ===
+  // Pitch / tempo
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
-    // base + bend → playbackRate objetivo
     const target = 1 + (pitchPct + bendPct) / 100;
 
-    // Cancela rampa anterior
     if (pitchRafRef.current) cancelAnimationFrame(pitchRafRef.current);
 
     const DURATION_MS = 120;
@@ -247,12 +291,12 @@ export default function Deck({
     setPitchPct(side, Math.max(-r, Math.min(r, pitchPct)));
   };
 
-  const BEND_MAX = 2.0; // ±2% típico CDJ
-  const BEND_RELEASE_MS = 120; // suelta rápido al dejar el botón
+  const BEND_MAX = 2.0;
+  const BEND_RELEASE_MS = 120;
 
   function startBend(sign) {
     bendHoldRef.current = true;
-    cancelAnimationFrame(bendRafRef.current);
+    if (bendRafRef.current) cancelAnimationFrame(bendRafRef.current);
     setBendPct(sign * BEND_MAX);
   }
 
@@ -276,15 +320,13 @@ export default function Deck({
   }
 
   return (
-    <div
-      className={`rounded-2xl border border-neutral-800 bg-neutral-900/70 p-5 shadow-xl relative overflow-hidden`}
-    >
+    <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-5 shadow-xl relative overflow-hidden">
       <div
         className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${colorClass}`}
       />
       <div className="relative grid gap-4">
-        <header className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+        <header className="flex items-center justify_between">
+          <h2 className="text-lg font-semibold tracking-tight">{`Deck ${side}`}</h2>
           <span
             className="text-xs text-neutral-400 truncate max-w-[50%]"
             title={fileName || "Sin archivo"}
@@ -292,6 +334,7 @@ export default function Deck({
             {fileName || "Sin archivo"}
           </span>
         </header>
+
         {/* Archivo */}
         <label className="flex items-center gap-3">
           <span className="shrink-0 px-3 py-2 rounded-xl bg-neutral-800 border border-neutral-700 text-sm">
@@ -304,6 +347,7 @@ export default function Deck({
             className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-neutral-200 file:text-neutral-900 hover:file:bg-white/90 cursor-pointer"
           />
         </label>
+
         {/* Tiempos y seek */}
         <div className="flex items-center justify-between text-sm text-neutral-300">
           <span className="text-xs text-neutral-400">
@@ -317,6 +361,7 @@ export default function Deck({
             {keyLock && " · (Key Lock)"}
           </span>
         </div>
+
         <HorizontalSlider
           min={0}
           max={Math.max(1, Math.floor(duration))}
@@ -325,21 +370,26 @@ export default function Deck({
           onChange={(e) => seek(e.target.value)}
           disabled={!objectUrl}
         />
-        {/* Forma de onda con zoom */}
-        <div className="relative w-full pb-7">
+
+        {/* Forma de onda */}
+        <div className="relative w_full pb-7">
           <WaveformCanvas
             waveData={waveData}
             beats={beats}
             audioRef={audioRef}
             zoom={zoom}
             scroll={scroll}
+            follow={follow}
             onSeek={(t) => {
               const el = audioRef.current;
               if (!el) return;
               el.currentTime = t;
-              setCurrent(t); // para que tu slider se actualice al clicar
+              setCurrent(t);
+              setFollow(false); // si clicas en la forma, dejas de seguir
             }}
           />
+
+          {/* Zoom */}
           <div className="absolute right-2 top-1 flex gap-2 text-xs text-neutral-400">
             <button
               onClick={() => setZoom((z) => Math.min(z * 2, 256))}
@@ -354,6 +404,21 @@ export default function Deck({
               🔍−
             </button>
           </div>
+
+          {/* Seguir */}
+          <div className="absolute left-2 top-1">
+            {!follow && (
+              <button
+                onClick={() => setFollow(true)}
+                className="px-2 py-0.5 text-[10px] bg-neutral-700 text-neutral-300 rounded hover:bg-neutral-600"
+                title="Volver a seguir la reproducción"
+              >
+                🔁 Seguir
+              </button>
+            )}
+          </div>
+
+          {/* Scroll manual (solo útil cuando follow = false) */}
           {zoom > 1 && (
             <input
               type="range"
@@ -361,12 +426,16 @@ export default function Deck({
               max={1}
               step={0.001}
               value={scroll}
-              onChange={(e) => setScroll(Number(e.target.value))}
+              onChange={(e) => {
+                setScroll(Number(e.target.value));
+                setFollow(false); // si mueves el scroll, dejas de seguir
+              }}
               className="absolute bottom-1 left-2 right-2 accent-white"
             />
           )}
         </div>
-        {/* Transporte + opciones */}
+
+        {/* Transporte */}
         <div className="flex items-center gap-3 flex-wrap">
           {!isPlaying ? (
             <button
@@ -391,6 +460,7 @@ export default function Deck({
           >
             ■ Stop
           </button>
+
           <button
             onClick={() => setKeyLock(side, !keyLock)}
             className={`px-3 py-2 rounded-2xl font-semibold border ${
@@ -401,6 +471,7 @@ export default function Deck({
           >
             Key Lock {keyLock ? "ON" : "OFF"}
           </button>
+
           <div className="ml-auto flex items-center gap-2 text-xs text-neutral-400">
             <span>Rango</span>
             <select
@@ -414,7 +485,8 @@ export default function Deck({
             </select>
           </div>
         </div>
-        {/* Columna lateral: Pitch (vertical), Volumen (vertical) + VU mini */}
+
+        {/* Pitch Slider */}
         <div className="flex items-end gap-6">
           <div className="flex flex-col items-center gap-2">
             <span className="text-xs text-neutral-400">Pitch</span>
@@ -430,8 +502,9 @@ export default function Deck({
             />
           </div>
         </div>
+
+        {/* Bend */}
         <div className="flex items-center gap-2">
-          {/* Bend – (más lento mientras lo mantienes) */}
           <button
             onMouseDown={() => startBend(-1)}
             onMouseUp={releaseBend}
@@ -443,7 +516,6 @@ export default function Deck({
           >
             Bend −
           </button>
-          {/* Bend + (más rápido mientras lo mantienes) */}
           <button
             onMouseDown={() => startBend(+1)}
             onMouseUp={releaseBend}
@@ -456,6 +528,7 @@ export default function Deck({
             Bend +
           </button>
         </div>
+
         {/* Audio */}
         <audio
           ref={audioRef}

@@ -1,21 +1,22 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 export default function WaveformCanvas({
   waveData,
   beats,
-  audioRef, // << referencia al <audio>
-  zoom = 1, // factor de zoom
-  scroll = 0, // 0..1
-  onSeek, // callback(tSeconds) para click
+  audioRef,
+  zoom,
+  scroll,
+  follow,
+  onSeek,
 }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
+    let frameId;
     const canvas = canvasRef.current;
     if (!canvas || !waveData || !waveData.length) return;
 
     const ctx = canvas.getContext("2d");
-    let frameId;
 
     const drawFrame = () => {
       const rect = canvas.getBoundingClientRect();
@@ -33,12 +34,41 @@ export default function WaveformCanvas({
         return;
       }
 
-      // Ventana visible según zoom + scroll
+      // Datos del audio (para follow y cursor)
+      const audioEl = audioRef?.current || null;
+      const dur = audioEl?.duration || 0;
+      const cur = audioEl?.currentTime || 0;
+      const curFrac = dur > 0 ? cur / dur : 0; // 0..1
+
+      // Ventana visible (en "muestras")
       const visible = Math.max(1, Math.floor(total / zoom));
-      const maxStart = Math.max(0, total - visible);
-      const start = maxStart > 0 ? scroll * maxStart : 0; // índice flotante
-      const leftFrac = start / total;
-      const rightFrac = (start + visible) / total;
+      const windowFrac = visible / total; // fracción del tema que cabe en el canvas
+
+      let leftFrac; // 0..1, inicio de la ventana
+      let rightFrac; // 0..1, fin de la ventana
+      let start; // índice float en waveData donde empieza la ventana
+
+      if (follow && dur > 0) {
+        // SEGUR FOLLOW: el playhead va a ~1/3 de la ventana
+        const cursorFracInWindow = 1 / 3;
+
+        // Queremos: curFrac ≈ leftFrac + cursorFracInWindow * windowFrac
+        let desiredLeft = curFrac - cursorFracInWindow * windowFrac;
+
+        // Clamps para inicio/fin de la pista
+        if (desiredLeft < 0) desiredLeft = 0;
+        if (desiredLeft > 1 - windowFrac) desiredLeft = 1 - windowFrac;
+
+        leftFrac = desiredLeft;
+        rightFrac = leftFrac + windowFrac;
+        start = leftFrac * total;
+      } else {
+        // MODO MANUAL: usamos el scroll que viene de React
+        const maxStart = Math.max(0, total - visible);
+        start = maxStart > 0 ? scroll * maxStart : 0;
+        leftFrac = start / total;
+        rightFrac = (start + visible) / total;
+      }
 
       // Fondo
       ctx.fillStyle = "#171717";
@@ -57,10 +87,6 @@ export default function WaveformCanvas({
         ctx.fillRect(x, y, 1, hh);
       }
 
-      // Datos “vivos” del audio
-      const audioEl = audioRef?.current || null;
-      const dur = audioEl?.duration || 0;
-
       // Beats
       if (beats && beats.length && dur > 0) {
         ctx.strokeStyle = "rgba(239,68,68,0.6)";
@@ -78,11 +104,14 @@ export default function WaveformCanvas({
         ctx.stroke();
       }
 
-      // Cursor de reproducción FIJO en el centro del canvas
+      // Cursor de reproducción (mismo cálculo en ambos modos)
       if (dur > 0) {
-        const cursorX = w / 2;
-        ctx.fillStyle = "rgba(255,255,255,0.9)";
-        ctx.fillRect(cursorX - 1, 0, 2, h);
+        if (curFrac >= leftFrac && curFrac <= rightFrac) {
+          const localFrac = (curFrac - leftFrac) / (rightFrac - leftFrac);
+          const cursorX = Math.max(0, Math.min(w, localFrac * w));
+          ctx.fillStyle = "rgba(255,255,255,0.9)";
+          ctx.fillRect(cursorX - 1, 0, 2, h);
+        }
       }
 
       frameId = requestAnimationFrame(drawFrame);
@@ -90,23 +119,23 @@ export default function WaveformCanvas({
 
     frameId = requestAnimationFrame(drawFrame);
     return () => cancelAnimationFrame(frameId);
-  }, [waveData, beats, audioRef, zoom, scroll]);
+  }, [waveData, beats, zoom, scroll, follow, audioRef]);
 
   const handleClick = (e) => {
     const canvas = canvasRef.current;
-    const audioEl = audioRef?.current || null;
+    const audioEl = audioRef?.current;
     if (
       !canvas ||
       !audioEl ||
-      !audioEl.duration ||
       !waveData ||
-      !waveData.length
+      !waveData.length ||
+      audioEl.duration <= 0
     )
       return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
     const w = rect.width || 1;
+    const x = e.clientX - rect.left;
 
     const total = waveData.length;
     const visible = Math.max(1, Math.floor(total / zoom));
@@ -115,12 +144,11 @@ export default function WaveformCanvas({
     const leftFrac = start / total;
     const rightFrac = (start + visible) / total;
 
-    const fracInView = x / w; // 0..1
+    const fracInView = x / w;
     const globalFrac = leftFrac + fracInView * (rightFrac - leftFrac);
     const t = globalFrac * audioEl.duration;
 
-    audioEl.currentTime = t;
-    onSeek?.(t);
+    if (onSeek) onSeek(t);
   };
 
   return (

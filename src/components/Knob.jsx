@@ -45,7 +45,7 @@ export default function Knob({
 
       {/* Label y valor */}
       {label && <span className="text-xs text-neutral-400">{label}</span>}
-      <span className="text-[10px] text-neutral-500">{value.toFixed(1)} dB</span>
+      <span className="text-[10px] text-neutral-500">{value?.toFixed(1)} dB</span>
     </div>
   );
 }
