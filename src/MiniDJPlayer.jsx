@@ -23,6 +23,8 @@ export default function MiniDJMixer() {
   const [keyLockA, setKeyLockA] = useState(false);
   const [keyLockB, setKeyLockB] = useState(false);
 
+  const [deckAutoGain, setDeckAutoGain] = useState({ A: 0, B: 0 });
+
   useEffect(() => {
     engine.setMasterAutoLevel(true);
     return () => engine.setMasterAutoLevel(false);
@@ -77,7 +79,6 @@ export default function MiniDJMixer() {
         {/* Decks */}
         <div className="grid lg:grid-cols-3 gap-6">
           <Deck
-            title="Deck A"
             colorClass="from-cyan-500/20 to-transparent"
             engine={engine}
             side="A"
@@ -92,6 +93,9 @@ export default function MiniDJMixer() {
             keyLock={keyLockA}
             setKeyLock={setKeyLock}
             onAttachEl={onAttachEl}
+            onAutoGainComputed={(side, gainDb) =>
+              setDeckAutoGain((prev) => ({ ...prev, [side]: gainDb }))
+            }
           />
           <Mixer
             engine={engine}
@@ -99,9 +103,9 @@ export default function MiniDJMixer() {
             setEq={setEq}
             vol={{ A: volA, B: volB }}
             onVolChange={onVolChange}
+            deckAutoGain={deckAutoGain}
           />
           <Deck
-            title="Deck B"
             colorClass="from-fuchsia-500/20 to-transparent"
             engine={engine}
             side="B"
@@ -116,6 +120,9 @@ export default function MiniDJMixer() {
             keyLock={keyLockB}
             setKeyLock={setKeyLock}
             onAttachEl={onAttachEl}
+            onAutoGainComputed={(side, gainDb) =>
+              setDeckAutoGain((prev) => ({ ...prev, [side]: gainDb }))
+            }
           />
         </div>
       </div>
