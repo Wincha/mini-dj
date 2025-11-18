@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import VerticalSlider from "./VerticalSlider";
 import HorizontalSlider from "./HorizontalSlider";
 import WaveformCanvas from "./WaveformCanvas";
-import { analyzeTrackLoudness } from "../audio/utils";
+import { analyzeTrackLoudness, BeatDetect } from "../audio/utils";
 
 export default function Deck({
   colorClass,
@@ -20,30 +20,71 @@ export default function Deck({
   const pitchRafRef = useRef(null);
   const audioRef = useRef(null);
   const timeupdateHandlerRef = useRef(null);
+  const beatDetectorRef = useRef(null);
+  const bpmDisplayRef = useRef(null);
 
-  // === Forma de onda ===
+  // === Forma de onda / análisis ===
   const [waveData, setWaveData] = useState(null);
   const [beats, setBeats] = useState([]);
+  const [bpm, setBpm] = useState(null);
 
   const [zoom, setZoom] = useState(64);
   const [scroll, setScroll] = useState(0);
-
-  // Seguimiento automático del playback
   const [follow, setFollow] = useState(true);
+  const [isBeatDetectorReady, setBeatDetectorReady] = useState(false);
 
-  async function extractWaveform(file) {
+  const [fileName, setFileName] = useState("");
+  const [objectUrl, setObjectUrl] = useState("");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [current, setCurrent] = useState(0);
+
+  const [bendPct, setBendPct] = useState(0);
+  const bendHoldRef = useRef(false);
+  const bendRafRef = useRef(null);
+
+  const [reverseAdvancedTime, setReverseAdvancedTime] = useState(true);
+
+  const livePitch = useMemo(() => pitchPct + bendPct, [pitchPct, bendPct]);
+
+  // BPM efectivo (corriendo) = BPM base × factor de tempo
+  const runningBpm = useMemo(() => {
+    if (!bpm) return null;
+    const factor = 1 + (pitchPct + bendPct) / 100;
+    return bpm * factor;
+  }, [bpm, pitchPct, bendPct]);
+
+  const getFilenameWithoutExtension = () => {
+    return fileName?.substring(0, fileName?.lastIndexOf(".")) || "Sin Archivo";
+  };
+
+  const calcDuration = (time) => {
+    if (!Number.isFinite(time)) return "00:00";
+
+    const totalSeconds = Math.max(0, Math.floor(time));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const pad = (val) => String(val).padStart(2, "0");
+
+    return hours > 0
+      ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+      : `${pad(minutes)}:${pad(seconds)}`;
+  };
+
+  // === Waveform + loudness (L+R → mono, resolución adaptativa) ===
+  async function extractWaveform(file, sourceUrl) {
     const arrayBuffer = await file.arrayBuffer();
     const audioBuffer = await engine.ctx.decodeAudioData(arrayBuffer);
 
-    // === 1) Waveform L+R → mono con resolución adaptativa ===
     const ch0 = audioBuffer.getChannelData(0);
     const hasStereo = audioBuffer.numberOfChannels > 1;
     const ch1 = hasStereo ? audioBuffer.getChannelData(1) : null;
 
-    const duration = audioBuffer.duration; // en segundos
-    const targetPerSecond = 80; // columnas por segundo visibles
+    const duration = audioBuffer.duration;
+    const targetPerSecond = 80;
     let samples = Math.floor(duration * targetPerSecond);
-    samples = Math.max(4000, Math.min(samples, 40000)); // clamp
+    samples = Math.max(4000, Math.min(samples, 40000));
 
     const len = ch0.length;
     const blockSize = Math.max(1, Math.floor(len / samples));
@@ -72,68 +113,115 @@ export default function Deck({
     const norm = peaks.map((v) => v / max);
     setWaveData(norm);
 
-    // === 2) Loudness medio usando MEDIANA por bloques ===
+    // Loudness con mediana
     const { db: medianDb } = analyzeTrackLoudness(audioBuffer);
-
-    // Queremos un target MÁS ALTO que antes.
-    // Si antes usábamos -12 dBFS, por ejemplo pasa a -8 dBFS o -6 dBFS:
-    const targetDb = -8; // prueba -8, si lo quieres aún más arriba, -6
-
+    const targetDb = -8;
     let gainDb = targetDb - medianDb;
 
-    // Limites para no hacer salvajadas
-    const MIN_GAIN_DB = -12; // cortar si ya viene muy caliente
-    const MAX_GAIN_DB = +9; // permitimos un poco más de boost
+    const MIN_GAIN_DB = -12;
+    const MAX_GAIN_DB = +9;
     gainDb = Math.max(MIN_GAIN_DB, Math.min(MAX_GAIN_DB, gainDb));
 
     if (typeof onAutoGainComputed === "function") {
       onAutoGainComputed(side, gainDb);
     }
+    if (sourceUrl) {
+      detectBeats({
+        url: sourceUrl,
+        duration,
+        trackName: file?.name || "track",
+      });
+    }
   }
 
-  async function detectBeats(file) {
-    const arrayBuffer = await file.arrayBuffer();
-    const audioBuffer = await engine.ctx.decodeAudioData(arrayBuffer);
-    const data = audioBuffer.getChannelData(0);
-
-    const sampleRate = audioBuffer.sampleRate;
-    const blockSize = 1024;
-    const energy = [];
-    for (let i = 0; i < data.length; i += blockSize) {
-      let sum = 0;
-      for (let j = 0; j < blockSize && i + j < data.length; j++) {
-        const v = data[i + j];
-        sum += v * v;
-      }
-      energy.push(sum / blockSize);
+  // === BPM avanzado + detección de beats ===
+  async function detectBeats({ url, duration: trackDuration, trackName }) {
+    const detector = beatDetectorRef.current;
+    if (!detector || !url) {
+      setBeats([]);
+      setBpm(null);
+      return;
     }
 
-    const avg = energy.reduce((a, b) => a + b, 0) / energy.length;
-    const threshold = avg * 1.5;
-    const beatsArr = [];
-    for (let i = 1; i < energy.length - 1; i++) {
-      if (
-        energy[i] > threshold &&
-        energy[i] > energy[i - 1] &&
-        energy[i] > energy[i + 1]
-      ) {
-        const t = (i * blockSize) / sampleRate;
-        beatsArr.push(t);
+    try {
+      const info = await detector.getBeatInfo({
+        url,
+        name: trackName,
+      });
+
+      const resolvedBpm = info?.bpm;
+      if (!resolvedBpm) {
+        setBpm(null);
+        setBeats([]);
+        return;
       }
+
+      const normalizedBpm = Math.round(resolvedBpm);
+      setBpm(normalizedBpm);
+
+      if (Number.isFinite(trackDuration) && trackDuration > 0) {
+        const beatInterval = 60 / resolvedBpm;
+        const beatStart = Number.isFinite(info?.firstBar)
+          ? Math.max(0, info.firstBar)
+          : Number.isFinite(info?.offset)
+          ? Math.max(0, info.offset)
+          : 0;
+        const beatsArr = [];
+        for (let t = beatStart; t < trackDuration; t += beatInterval) {
+          beatsArr.push(t);
+        }
+        setBeats(beatsArr);
+      } else {
+        setBeats([]);
+      }
+    } catch (err) {
+      console.error("Beat detection failed", err);
+      setBeats([]);
+      setBpm(null);
     }
-    setBeats(beatsArr);
   }
 
-  const [fileName, setFileName] = useState("");
-  const [objectUrl, setObjectUrl] = useState("");
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [current, setCurrent] = useState(0);
-  const [bendPct, setBendPct] = useState(0);
-  const bendHoldRef = useRef(false);
-  const bendRafRef = useRef(null);
+  // Instancia única del detector de beats (solo en cliente)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (beatDetectorRef.current) {
+      setBeatDetectorReady(true);
+      return;
+    }
+    try {
+      beatDetectorRef.current = new BeatDetect({
+        sampleRate: engine?.ctx?.sampleRate || 44100,
+      });
+      setBeatDetectorReady(true);
+    } catch (err) {
+      console.error("Unable to init BeatDetect", err);
+    }
+  }, [engine]);
 
-  const livePitch = useMemo(() => pitchPct + bendPct, [pitchPct, bendPct]);
+  // Soporte de TAP BPM manual sobre el display
+  useEffect(() => {
+    const detector = beatDetectorRef.current;
+    const element = bpmDisplayRef.current;
+    if (!isBeatDetectorReady || !detector || !element) return;
+
+    const cleanup = detector.tapBpm({
+      element,
+      precision: 1,
+      callback: (value) => {
+        if (value === "--") return;
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) {
+          setBpm(numeric);
+        }
+      },
+    });
+
+    return () => {
+      if (typeof cleanup === "function") {
+        cleanup();
+      }
+    };
+  }, [isBeatDetectorReady]);
 
   // listeners básicos del <audio>
   useEffect(() => {
@@ -192,8 +280,7 @@ export default function Deck({
     setObjectUrl(url);
     setFileName(f.name);
 
-    extractWaveform(f);
-    detectBeats(f);
+    extractWaveform(f, url);
 
     const el = audioRef.current;
     if (!el) return;
@@ -203,7 +290,7 @@ export default function Deck({
     setCurrent(0);
     setDuration(0);
     setScroll(0);
-    setFollow(true); // al cargar pista nueva, volvemos a seguir
+    setFollow(true);
   };
 
   const onLoaded = () => {
@@ -248,7 +335,7 @@ export default function Deck({
     setCurrent(t);
   };
 
-  // Pitch / tempo
+  // Pitch / tempo suave
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
@@ -325,21 +412,15 @@ export default function Deck({
         className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${colorClass}`}
       />
       <div className="relative grid gap-4">
-        <header className="flex items-center justify_between">
+        <header className="flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-tight">{`Deck ${side}`}</h2>
-          <span
-            className="text-xs text-neutral-400 truncate max-w-[50%]"
-            title={fileName || "Sin archivo"}
-          >
-            {fileName || "Sin archivo"}
+          <span className="text-xs text-neutral-400 truncate max-w-[50%]">
+            {getFilenameWithoutExtension()}
           </span>
         </header>
 
         {/* Archivo */}
         <label className="flex items-center gap-3">
-          <span className="shrink-0 px-3 py-2 rounded-xl bg-neutral-800 border border-neutral-700 text-sm">
-            Archivo
-          </span>
           <input
             type="file"
             accept="audio/*,.mp3,.wav,.ogg,.flac"
@@ -348,20 +429,35 @@ export default function Deck({
           />
         </label>
 
-        {/* Tiempos y seek */}
-        <div className="flex items-center justify-between text-sm text-neutral-300">
-          <span className="text-xs text-neutral-400">
-            Pitch: {livePitch.toFixed(2)}%
-            {bendPct !== 0 && (
-              <span className="ml-2 text-[10px] text-sky-300">
-                (base {pitchPct.toFixed(2)}% · bend {bendPct > 0 ? "+" : ""}
-                {bendPct.toFixed(2)}%)
-              </span>
-            )}
-            {keyLock && " · (Key Lock)"}
-          </span>
+        {/* Tiempo + BPM */}
+        <div className="flex items-center justify-between">
+          <h5
+            className="tracking-tight cursor-pointer"
+            onClick={() =>
+              setReverseAdvancedTime((prevReverseTime) => !prevReverseTime)
+            }
+          >
+            {reverseAdvancedTime
+              ? `-${calcDuration(duration - current)}`
+              : calcDuration(current)}
+          </h5>
+          <div className="text-right text-xs text-neutral-400 leading-tight">
+            <div>{calcDuration(duration)}</div>
+            <div
+              ref={bpmDisplayRef}
+              className="cursor-pointer select-none"
+              title="Haz click para tap BPM manualmente"
+            >
+              {runningBpm
+                ? `${runningBpm.toFixed(1)} BPM`
+                : bpm
+                ? `${bpm} BPM`
+                : "BPM --"}
+            </div>
+          </div>
         </div>
 
+        {/* Seek global */}
         <HorizontalSlider
           min={0}
           max={Math.max(1, Math.floor(duration))}
@@ -385,7 +481,7 @@ export default function Deck({
               if (!el) return;
               el.currentTime = t;
               setCurrent(t);
-              setFollow(false); // si clicas en la forma, dejas de seguir
+              setFollow(false);
             }}
           />
 
@@ -418,7 +514,7 @@ export default function Deck({
             )}
           </div>
 
-          {/* Scroll manual (solo útil cuando follow = false) */}
+          {/* Scroll manual */}
           {zoom > 1 && (
             <input
               type="range"
@@ -428,7 +524,7 @@ export default function Deck({
               value={scroll}
               onChange={(e) => {
                 setScroll(Number(e.target.value));
-                setFollow(false); // si mueves el scroll, dejas de seguir
+                setFollow(false);
               }}
               className="absolute bottom-1 left-2 right-2 accent-white"
             />
@@ -486,50 +582,62 @@ export default function Deck({
           </div>
         </div>
 
-        {/* Pitch Slider */}
-        <div className="flex items-end gap-6">
-          <div className="flex flex-col items-center gap-2">
-            <span className="text-xs text-neutral-400">Pitch</span>
-            <VerticalSlider
-              min={-pitchRange}
-              max={pitchRange}
-              step={0.01}
-              value={pitchPct}
-              onChange={(e) => onPitchChange(e.target.value)}
-              height={180}
-              width={28}
-              inverted={true}
-            />
+        {/* Pitch + Bend */}
+        <div className="flex items-center justify-between text-sm text-neutral-300">
+          <span className="text-xs text-neutral-400">
+            Pitch: {livePitch.toFixed(2)}%
+            {bendPct !== 0 && (
+              <span className="ml-2 text-[10px] text-sky-300">
+                (base {pitchPct.toFixed(2)}% · bend{" "}
+                {bendPct > 0 ? "+" : ""}
+                {bendPct.toFixed(2)}%)
+              </span>
+            )}
+            {keyLock && " · (Key Lock)"}
+          </span>
+
+          <div className="flex items-end gap-6">
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-xs text-neutral-400">Pitch</span>
+              <VerticalSlider
+                min={-pitchRange}
+                max={pitchRange}
+                step={0.01}
+                value={pitchPct}
+                onChange={(e) => onPitchChange(e.target.value)}
+                height={180}
+                width={28}
+                inverted={true}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onMouseDown={() => startBend(-1)}
+              onMouseUp={releaseBend}
+              onMouseLeave={releaseBend}
+              onTouchStart={() => startBend(-1)}
+              onTouchEnd={releaseBend}
+              className="px-3 py-1 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs"
+              title="Bend − (más lento mientras mantienes)"
+            >
+              Bend −
+            </button>
+            <button
+              onMouseDown={() => startBend(+1)}
+              onMouseUp={releaseBend}
+              onMouseLeave={releaseBend}
+              onTouchStart={() => startBend(+1)}
+              onTouchEnd={releaseBend}
+              className="px-3 py-1 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs"
+              title="Bend + (más rápido mientras mantienes)"
+            >
+              Bend +
+            </button>
           </div>
         </div>
 
-        {/* Bend */}
-        <div className="flex items-center gap-2">
-          <button
-            onMouseDown={() => startBend(-1)}
-            onMouseUp={releaseBend}
-            onMouseLeave={releaseBend}
-            onTouchStart={() => startBend(-1)}
-            onTouchEnd={releaseBend}
-            className="px-3 py-1 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs"
-            title="Bend − (más lento mientras mantienes)"
-          >
-            Bend −
-          </button>
-          <button
-            onMouseDown={() => startBend(+1)}
-            onMouseUp={releaseBend}
-            onMouseLeave={releaseBend}
-            onTouchStart={() => startBend(+1)}
-            onTouchEnd={releaseBend}
-            className="px-3 py-1 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs"
-            title="Bend + (más rápido mientras mantienes)"
-          >
-            Bend +
-          </button>
-        </div>
-
-        {/* Audio */}
         <audio
           ref={audioRef}
           onLoadedMetadata={onLoaded}
