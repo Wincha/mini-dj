@@ -12,8 +12,8 @@ export default function Deck({
   setPitchPct,
   pitchRange,
   setPitchRange,
-  keyLock,
-  setKeyLock,
+  // keyLock,
+  // setKeyLock,
   onAttachEl,
   onAutoGainComputed,
 }) {
@@ -418,7 +418,6 @@ export default function Deck({
             {getFilenameWithoutExtension()}
           </span>
         </header>
-
         {/* Archivo */}
         <label className="flex items-center gap-3">
           <input
@@ -428,216 +427,204 @@ export default function Deck({
             className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-neutral-200 file:text-neutral-900 hover:file:bg-white/90 cursor-pointer"
           />
         </label>
-
-        {/* Tiempo + BPM */}
-        <div className="flex items-center justify-between">
-          <h5
-            className="tracking-tight cursor-pointer"
-            onClick={() =>
-              setReverseAdvancedTime((prevReverseTime) => !prevReverseTime)
-            }
-          >
-            {reverseAdvancedTime
-              ? `-${calcDuration(duration - current)}`
-              : calcDuration(current)}
-          </h5>
-          <div className="text-right text-xs text-neutral-400 leading-tight">
-            <div>{calcDuration(duration)}</div>
-            <div
-              ref={bpmDisplayRef}
-              className="cursor-pointer select-none"
-              title="Haz click para tap BPM manualmente"
-            >
-              {runningBpm
-                ? `${runningBpm.toFixed(1)} BPM`
-                : bpm
-                ? `${bpm} BPM`
-                : "BPM --"}
+        {/* Content */}
+        <div className="flex flex-row gap-1 w-full">
+          <div className="flex flex-col gap-1 w-5/6">
+            {/* Tiempo + BPM */}
+            <div className="flex items-center justify-between">
+              <h5
+                className="tracking-tight cursor-pointer"
+                onClick={() =>
+                  setReverseAdvancedTime((prevReverseTime) => !prevReverseTime)
+                }
+              >
+                {reverseAdvancedTime
+                  ? `-${calcDuration(duration - current)}`
+                  : calcDuration(current)}
+              </h5>
+              <div className="text-right text-xs text-neutral-400 leading-tight">
+                <div>{calcDuration(duration)}</div>
+                <div
+                  ref={bpmDisplayRef}
+                  className="cursor-pointer select-none"
+                  title="Haz click para tap BPM manualmente"
+                >
+                  {runningBpm
+                    ? `${runningBpm.toFixed(1)} BPM`
+                    : bpm
+                    ? `${bpm} BPM`
+                    : "BPM --"}
+                </div>
+              </div>
+            </div>
+            {/* Seek global */}
+            <HorizontalSlider
+              min={0}
+              max={Math.max(1, Math.floor(duration))}
+              step={0.01}
+              value={Number.isFinite(current) ? current : 0}
+              onChange={(e) => seek(e.target.value)}
+              disabled={!objectUrl}
+            />
+            {/* Forma de onda */}
+            <div className="relative w_full pb-7">
+              <WaveformCanvas
+                waveData={waveData}
+                beats={beats}
+                audioRef={audioRef}
+                zoom={zoom}
+                scroll={scroll}
+                follow={follow}
+                onSeek={(t) => {
+                  const el = audioRef.current;
+                  if (!el) return;
+                  el.currentTime = t;
+                  setCurrent(t);
+                  setFollow(false);
+                }}
+              />
+              {/* Zoom */}
+              <div className="absolute right-2 top-1 flex gap-2 text-xs text-neutral-400">
+                <button
+                  onClick={() => setZoom((z) => Math.min(z * 2, 256))}
+                  className="px-2 py-0.5 bg-neutral-700 rounded hover:bg-neutral-600"
+                >
+                  🔍+
+                </button>
+                <button
+                  onClick={() => setZoom((z) => Math.max(z / 2, 1))}
+                  className="px-2 py-0.5 bg-neutral-700 rounded hover:bg-neutral-600"
+                >
+                  🔍−
+                </button>
+              </div>
+              {/* Seguir */}
+              <div className="absolute left-2 top-1">
+                {!follow && (
+                  <button
+                    onClick={() => setFollow(true)}
+                    className="px-2 py-0.5 text-[10px] bg-neutral-700 text-neutral-300 rounded hover:bg-neutral-600"
+                    title="Volver a seguir la reproducción"
+                  >
+                    🔁 Seguir
+                  </button>
+                )}
+              </div>
+              {/* Scroll manual */}
+              {zoom > 1 && (
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.001}
+                  value={scroll}
+                  onChange={(e) => {
+                    setScroll(Number(e.target.value));
+                    setFollow(false);
+                  }}
+                  className="absolute bottom-1 left-2 right-2 accent-white"
+                />
+              )}
+            </div>
+            {/* Transporte */}
+            <div className="flex items-center gap-3 flex-wrap">
+              {!isPlaying ? (
+                <button
+                  onClick={play}
+                  disabled={!objectUrl}
+                  className="px-4 py-2 rounded-2xl bg-emerald-500 text-black font-semibold disabled:opacity-50"
+                >
+                  ▶︎ Play
+                </button>
+              ) : (
+                <button
+                  onClick={pause}
+                  className="px-4 py-2 rounded-2xl bg-yellow-400 text-black font-semibold"
+                >
+                  ❚❚ Pausa
+                </button>
+              )}
+              <button
+                onClick={stop}
+                disabled={!objectUrl}
+                className="px-4 py-2 rounded-2xl bg-neutral-200 text-black font-semibold disabled:opacity-50"
+              >
+                ■ Stop
+              </button>
+              {/* <button
+                onClick={() => setKeyLock(side, !keyLock)}
+                className={`px-3 py-2 rounded-2xl font-semibold border ${
+                  keyLock
+                    ? "bg-sky-400 text-black border-sky-300"
+                    : "bg-neutral-800 text-neutral-200 border-neutral-700"
+                }`}
+              >
+                Key Lock {keyLock ? "ON" : "OFF"}
+              </button> */}
+              <div className="ml-auto flex items-center gap-2 text-xs text-neutral-400">
+                <span>Rango</span>
+                <select
+                  value={pitchRange}
+                  onChange={onRangeChange}
+                  className="bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1"
+                >
+                  <option value={8}>±8%</option>
+                  <option value={16}>±16%</option>
+                  <option value={50}>±50%</option>
+                </select>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Seek global */}
-        <HorizontalSlider
-          min={0}
-          max={Math.max(1, Math.floor(duration))}
-          step={0.01}
-          value={Number.isFinite(current) ? current : 0}
-          onChange={(e) => seek(e.target.value)}
-          disabled={!objectUrl}
-        />
-
-        {/* Forma de onda */}
-        <div className="relative w_full pb-7">
-          <WaveformCanvas
-            waveData={waveData}
-            beats={beats}
-            audioRef={audioRef}
-            zoom={zoom}
-            scroll={scroll}
-            follow={follow}
-            onSeek={(t) => {
-              const el = audioRef.current;
-              if (!el) return;
-              el.currentTime = t;
-              setCurrent(t);
-              setFollow(false);
-            }}
-          />
-
-          {/* Zoom */}
-          <div className="absolute right-2 top-1 flex gap-2 text-xs text-neutral-400">
-            <button
-              onClick={() => setZoom((z) => Math.min(z * 2, 256))}
-              className="px-2 py-0.5 bg-neutral-700 rounded hover:bg-neutral-600"
-            >
-              🔍+
-            </button>
-            <button
-              onClick={() => setZoom((z) => Math.max(z / 2, 1))}
-              className="px-2 py-0.5 bg-neutral-700 rounded hover:bg-neutral-600"
-            >
-              🔍−
-            </button>
-          </div>
-
-          {/* Seguir */}
-          <div className="absolute left-2 top-1">
-            {!follow && (
-              <button
-                onClick={() => setFollow(true)}
-                className="px-2 py-0.5 text-[10px] bg-neutral-700 text-neutral-300 rounded hover:bg-neutral-600"
-                title="Volver a seguir la reproducción"
-              >
-                🔁 Seguir
-              </button>
-            )}
-          </div>
-
-          {/* Scroll manual */}
-          {zoom > 1 && (
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.001}
-              value={scroll}
-              onChange={(e) => {
-                setScroll(Number(e.target.value));
-                setFollow(false);
-              }}
-              className="absolute bottom-1 left-2 right-2 accent-white"
-            />
-          )}
-        </div>
-
-        {/* Transporte */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {!isPlaying ? (
-            <button
-              onClick={play}
-              disabled={!objectUrl}
-              className="px-4 py-2 rounded-2xl bg-emerald-500 text-black font-semibold disabled:opacity-50"
-            >
-              ▶︎ Play
-            </button>
-          ) : (
-            <button
-              onClick={pause}
-              className="px-4 py-2 rounded-2xl bg-yellow-400 text-black font-semibold"
-            >
-              ❚❚ Pausa
-            </button>
-          )}
-          <button
-            onClick={stop}
-            disabled={!objectUrl}
-            className="px-4 py-2 rounded-2xl bg-neutral-200 text-black font-semibold disabled:opacity-50"
-          >
-            ■ Stop
-          </button>
-
-          <button
-            onClick={() => setKeyLock(side, !keyLock)}
-            className={`px-3 py-2 rounded-2xl font-semibold border ${
-              keyLock
-                ? "bg-sky-400 text-black border-sky-300"
-                : "bg-neutral-800 text-neutral-200 border-neutral-700"
-            }`}
-          >
-            Key Lock {keyLock ? "ON" : "OFF"}
-          </button>
-
-          <div className="ml-auto flex items-center gap-2 text-xs text-neutral-400">
-            <span>Rango</span>
-            <select
-              value={pitchRange}
-              onChange={onRangeChange}
-              className="bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1"
-            >
-              <option value={8}>±8%</option>
-              <option value={16}>±16%</option>
-              <option value={50}>±50%</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Pitch + Bend */}
-        <div className="flex items-center justify-between text-sm text-neutral-300">
-          <span className="text-xs text-neutral-400">
-            Pitch: {livePitch.toFixed(2)}%
-            {bendPct !== 0 && (
-              <span className="ml-2 text-[10px] text-sky-300">
-                (base {pitchPct.toFixed(2)}% · bend{" "}
-                {bendPct > 0 ? "+" : ""}
-                {bendPct.toFixed(2)}%)
+          <div className="flex flex-col gap-1 w-1/6">
+            {/* Pitch + Bend */}
+            <div className="flex flex-col items-center">
+              <span className="text-xs text-neutral-400">
+                Pitch: {livePitch.toFixed(2)}%
               </span>
-            )}
-            {keyLock && " · (Key Lock)"}
-          </span>
-
-          <div className="flex items-end gap-6">
-            <div className="flex flex-col items-center gap-2">
-              <span className="text-xs text-neutral-400">Pitch</span>
+              <span className="text-xs text-neutral-400">
+                <span className="ml-2 text-[10px] text-sky-300">
+                  bend {bendPct > 0 ? "+" : ""}
+                  {bendPct.toFixed(2)}%
+                </span>
+                {/* {keyLock && " · (Key Lock)"} */}
+              </span>
               <VerticalSlider
                 min={-pitchRange}
                 max={pitchRange}
                 step={0.01}
                 value={pitchPct}
                 onChange={(e) => onPitchChange(e.target.value)}
-                height={180}
-                width={28}
+                height={150}
+                width={20}
                 inverted={true}
               />
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onMouseDown={() => startBend(-1)}
-              onMouseUp={releaseBend}
-              onMouseLeave={releaseBend}
-              onTouchStart={() => startBend(-1)}
-              onTouchEnd={releaseBend}
-              className="px-3 py-1 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs"
-              title="Bend − (más lento mientras mantienes)"
-            >
-              Bend −
-            </button>
-            <button
-              onMouseDown={() => startBend(+1)}
-              onMouseUp={releaseBend}
-              onMouseLeave={releaseBend}
-              onTouchStart={() => startBend(+1)}
-              onTouchEnd={releaseBend}
-              className="px-3 py-1 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs"
-              title="Bend + (más rápido mientras mantienes)"
-            >
-              Bend +
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onMouseDown={() => startBend(-1)}
+                onMouseUp={releaseBend}
+                onMouseLeave={releaseBend}
+                onTouchStart={() => startBend(-1)}
+                onTouchEnd={releaseBend}
+                className="px-3 py-1 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs"
+                title="Bend − (más lento mientras mantienes)"
+              >
+                −
+              </button>
+              <button
+                onMouseDown={() => startBend(+1)}
+                onMouseUp={releaseBend}
+                onMouseLeave={releaseBend}
+                onTouchStart={() => startBend(+1)}
+                onTouchEnd={releaseBend}
+                className="px-3 py-1 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs"
+                title="Bend + (más rápido mientras mantienes)"
+              >
+                +
+              </button>
+            </div>
           </div>
         </div>
-
         <audio
           ref={audioRef}
           onLoadedMetadata={onLoaded}
