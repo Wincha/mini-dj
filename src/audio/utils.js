@@ -160,6 +160,46 @@ export class BeatDetect {
   }
 
 
+  /** Análisis directo desde un AudioBuffer ya decodificado.
+   * Evita el fetch XHR sobre el mismo blob URL que está reproduciendo el
+   * <audio> (dos lectores concurrentes del mismo blob congelan la
+   * reproducción) y se ahorra un decode completo. **/
+  getBeatInfoFromBuffer(audioBuffer, name = 'buffer') {
+    const options = {
+      name,
+      perf: { m0: performance.now(), m1: performance.now(), m2: 0, m3: 0 }
+    };
+    return new Promise((resolve, reject) => {
+      try {
+        const offlineCtx = new window.OfflineContext(2, audioBuffer.duration * this._sampleRate, this._sampleRate);
+        const source = offlineCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        const lowpass = offlineCtx.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.value = this._lowPassFreq;
+        lowpass.Q.value = 1;
+        const highpass = offlineCtx.createBiquadFilter();
+        highpass.type = 'highpass';
+        highpass.frequency.value = this._highPassFreq;
+        highpass.Q.value = 1;
+        source.connect(lowpass);
+        lowpass.connect(highpass);
+        highpass.connect(offlineCtx.destination);
+        source.start(0);
+        offlineCtx.startRendering();
+        offlineCtx.oncomplete = result => {
+          options.perf.m2 = performance.now();
+          this._processRenderedBuffer(Object.assign(result, options))
+            .then(resolve).catch(reject);
+        };
+        offlineCtx.onerror = reject;
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+
   /*  --------------------------------------------------------------------------------------------------------------- */
   /*  ----------------------------------------  OVERALL LOGIC METHODS  ---------------------------------------------  */
   /*  --------------------------------------------------------------------------------------------------------------- */

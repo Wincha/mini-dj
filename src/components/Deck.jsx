@@ -109,8 +109,7 @@ export default function Deck({
   };
 
   // === Waveform + loudness (L+R → mono, resolución adaptativa) ===
-  async function extractWaveform(file, sourceUrl) {
-    const arrayBuffer = await file.arrayBuffer();
+  async function extractWaveform(arrayBuffer, trackName) {
     const audioBuffer = await engine.ctx.decodeAudioData(arrayBuffer);
 
     const ch0 = audioBuffer.getChannelData(0);
@@ -171,16 +170,12 @@ export default function Deck({
     if (typeof onAutoGainComputed === "function") {
       onAutoGainComputed(side, gainDb);
     }
-    if (sourceUrl) {
-      setAnalyzing("bpm");
-      detectBeats({
-        url: sourceUrl,
-        duration,
-        trackName: file?.name || "track",
-      });
-    } else {
-      setAnalyzing(null);
-    }
+    setAnalyzing("bpm");
+    detectBeats({
+      audioBuffer,
+      duration,
+      trackName: trackName || "track",
+    });
   }
 
   // Auto-cue: solo si el usuario no ha fijado un cue manual.
@@ -196,9 +191,11 @@ export default function Deck({
   };
 
   // === BPM avanzado + detección de beats ===
-  async function detectBeats({ url, duration: trackDuration, trackName }) {
+  // Trabaja sobre el AudioBuffer ya decodificado: nada de re-fetch del blob
+  // (congelaba la reproducción si dabas al play durante el análisis)
+  async function detectBeats({ audioBuffer, duration: trackDuration, trackName }) {
     const detector = beatDetectorRef.current;
-    if (!detector || !url) {
+    if (!detector || !audioBuffer) {
       setBeats([]);
       updateBpm(null);
       setAnalyzing(null);
@@ -206,10 +203,7 @@ export default function Deck({
     }
 
     try {
-      const info = await detector.getBeatInfo({
-        url,
-        name: trackName,
-      });
+      const info = await detector.getBeatInfoFromBuffer(audioBuffer, trackName);
 
       const resolvedBpm = info?.bpm;
       if (!resolvedBpm) {
@@ -333,8 +327,6 @@ export default function Deck({
 
   const loadTrack = (f) => {
     if (!f) return;
-    const url = URL.createObjectURL(f);
-    setObjectUrl(url);
     setFileName(f.name);
     setWaveData(null);
     setBeats([]);
@@ -349,21 +341,36 @@ export default function Deck({
       onAnalysis(side, { waveData: null, beats: [], duration: 0 });
     }
 
-    extractWaveform(f, url).catch((err) => {
-      console.error("Track analysis failed", err);
+    (async () => {
+      // Copia propia de los bytes: si el mismo archivo se carga en los dos
+      // decks, dos <audio> leyendo el MISMO File en streaming se atascan
+      // (la reproducción se congela); con una copia por deck no
+      const arrayBuffer = await f.arrayBuffer();
+      const blobCopy = new Blob([arrayBuffer], {
+        type: f.type || "audio/mpeg",
+      });
+      const url = URL.createObjectURL(blobCopy);
+      setObjectUrl(url);
+
+      const el = audioRef.current;
+      if (el) {
+        el.src = url;
+        el.load();
+        el.preservesPitch = !!keyLock;
+      }
+      setIsPlaying(false);
+      setCurrent(0);
+      setDuration(0);
+      setScroll(0);
+      setFollow(true);
+
+      // decodeAudioData "consume" (detach) el arrayBuffer, por eso la copia
+      // del blob se hace antes
+      await extractWaveform(arrayBuffer, f.name);
+    })().catch((err) => {
+      console.error("Track load failed", err);
       setAnalyzing(null);
     });
-
-    const el = audioRef.current;
-    if (!el) return;
-    el.src = url;
-    el.load();
-    el.preservesPitch = !!keyLock;
-    setIsPlaying(false);
-    setCurrent(0);
-    setDuration(0);
-    setScroll(0);
-    setFollow(true);
   };
 
   const loadTrackRef = useRef(loadTrack);
