@@ -852,10 +852,11 @@ export default function Deck({
               >
                 ■ Stop
               </button>
+              {/* min-w fijo: que el texto SYNC·MST no ensanche y desplace la UI */}
               <button
                 onClick={() => onSync?.(side)}
                 disabled={!canSync || !bpm}
-                className={`px-3 py-2 rounded-2xl font-semibold disabled:opacity-40 ${
+                className={`px-3 py-2 rounded-2xl font-semibold text-center min-w-28 disabled:opacity-40 ${
                   syncActive
                     ? "bg-emerald-500 text-black"
                     : "bg-sky-500/80 text-black"
@@ -893,8 +894,8 @@ export default function Deck({
                 </select>
               </div>
             </div>
-            {/* Hot cues + Loop */}
-            <div className="flex items-center gap-2 flex-wrap text-xs">
+            {/* Hot cues + Jump + Loop, alineados y separados del transporte */}
+            <div className="flex items-center gap-x-4 gap-y-2 flex-wrap text-xs mt-1 pt-3 border-t border-neutral-800/70">
               <div className="flex items-center gap-1">
                 {hotCues.map((t, i) => (
                   <button
@@ -973,7 +974,7 @@ export default function Deck({
                   TAP
                 </button>
               </div>
-              <div className="flex items-center gap-1 ml-auto">
+              <div className="flex items-center gap-1">
                 <span className="text-neutral-500 mr-1">Loop</span>
                 <button
                   onClick={setLoopInNow}
