@@ -7,13 +7,17 @@ export default function Knob({
   value,
   onChange,
   label,
+  size = 56, // diámetro en px
 }) {
   const pct = (value - min) / (max - min); // 0..1
   const deg = useMemo(() => -135 + pct * 270, [pct]); // [-135°, +135°]
 
   return (
-    <div className="flex flex-col items-center gap-1 select-none">
-      <div className="relative w-14 h-14 rounded-full bg-neutral-800 border border-neutral-700 shadow-inner overflow-hidden">
+    <div className="flex flex-col items-center gap-0.5 select-none">
+      <div
+        className="relative rounded-full bg-neutral-800 border border-neutral-700 shadow-inner overflow-hidden"
+        style={{ width: size, height: size }}
+      >
         {/* Cara con SVG para una aguja precisa */}
         <svg viewBox="0 0 56 56" className="absolute inset-0">
           {/* fondo interno */}

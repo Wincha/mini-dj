@@ -10,6 +10,8 @@ import Deck from "./components/Deck";
 import CentralMeters from "./components/CentralMeters";
 import Mixer from "./components/Mixer";
 import TrackList from "./components/TrackList";
+import BeatMatchPanel from "./components/BeatMatchPanel";
+import HeadphoneCue from "./components/HeadphoneCue";
 
 const PITCH_RANGES = [8, 16, 50];
 
@@ -341,8 +343,6 @@ export default function MiniDJMixer() {
             vol={{ A: volA, B: volB }}
             onVolChange={onVolChange}
             deckAutoGain={deckAutoGain}
-            analysis={deckAnalysis}
-            audioElsRef={audioElsRef}
           />
           <Deck
             ref={(api) => {
@@ -373,6 +373,12 @@ export default function MiniDJMixer() {
               setDeckAutoGain((prev) => ({ ...prev, [side]: gainDb }))
             }
           />
+        </div>
+
+        {/* Beat match + pre-escucha */}
+        <div className="grid lg:grid-cols-2 gap-4 sm:gap-6">
+          <BeatMatchPanel analysis={deckAnalysis} audioElsRef={audioElsRef} />
+          <HeadphoneCue engine={engine} />
         </div>
 
         {/* Lista de canciones */}

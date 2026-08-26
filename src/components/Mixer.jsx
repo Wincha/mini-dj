@@ -3,9 +3,6 @@ import HorizontalSlider from "./HorizontalSlider";
 import VerticalSlider from "./VerticalSlider";
 import VUBar from "./VUBar";
 import Knob from "./Knob";
-import BeatMatchPanel from "./BeatMatchPanel";
-import HeadphoneCue from "./HeadphoneCue";
-
 export default function Mixer({
   engine,
   eq,
@@ -13,8 +10,6 @@ export default function Mixer({
   vol,
   onVolChange,
   deckAutoGain,
-  analysis,
-  audioElsRef,
 }) {
   const [cross, setCross] = useState(0.5);
   const [autoGainEnabled, setAutoGainEnabled] = useState({
@@ -57,8 +52,9 @@ export default function Mixer({
     >
       <div className="flex flex-row flex-wrap gap-4 justify-between mb-4">
         <div className="flex flex-row items-center gap-3 sm:gap-4">
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
             <Knob
+              size={44}
               label="Gain"
               min={-24}
               max={+12}
@@ -79,6 +75,7 @@ export default function Mixer({
               Auto
             </button>
             <Knob
+              size={44}
               label="High"
               min={-12}
               max={+12}
@@ -89,6 +86,7 @@ export default function Mixer({
               }
             />
             <Knob
+              size={44}
               label="Mid"
               min={-12}
               max={+12}
@@ -99,6 +97,7 @@ export default function Mixer({
               }
             />
             <Knob
+              size={44}
               label="Low"
               min={-12}
               max={+12}
@@ -133,8 +132,9 @@ export default function Mixer({
               className="h-auto gap-2"
             />
           </div>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
             <Knob
+              size={44}
               label="Gain"
               min={-24}
               max={+12}
@@ -155,6 +155,7 @@ export default function Mixer({
               Auto
             </button>
             <Knob
+              size={44}
               label="High"
               min={-12}
               max={+12}
@@ -165,6 +166,7 @@ export default function Mixer({
               }
             />
             <Knob
+              size={44}
               label="Mid"
               min={-12}
               max={+12}
@@ -175,6 +177,7 @@ export default function Mixer({
               }
             />
             <Knob
+              size={44}
               label="Low"
               min={-12}
               max={+12}
@@ -200,10 +203,6 @@ export default function Mixer({
           value={cross}
           onChange={(e) => setCross(Number(e.target.value))}
         />
-      </div>
-      <div className="mt-4 grid gap-4">
-        <BeatMatchPanel analysis={analysis} audioElsRef={audioElsRef} />
-        <HeadphoneCue engine={engine} />
       </div>
     </div>
   );

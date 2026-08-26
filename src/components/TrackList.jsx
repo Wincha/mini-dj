@@ -67,7 +67,7 @@ export default function TrackList({
               key={track.id}
               className="flex flex-wrap items-center gap-2 py-2"
             >
-              <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 flex-1 min-w-0">
                 {deckBadge(track).map((side) => (
                   <span
                     key={side}
@@ -80,7 +80,9 @@ export default function TrackList({
                     {side}
                   </span>
                 ))}
-                <span className="truncate text-sm">{track.name}</span>
+                <span className="truncate text-sm min-w-24 max-w-full">
+                  {track.name}
+                </span>
                 <span className="shrink-0 text-xs text-neutral-500">
                   {formatSize(track.size)}
                 </span>
