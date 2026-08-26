@@ -27,6 +27,9 @@ export default function Deck({
   onAnalysis,
   onSync,
   canSync,
+  syncActive,
+  syncLabel,
+  onPlayed,
   externalTrack,
   isActive,
   onActivate,
@@ -391,6 +394,7 @@ export default function Deck({
     try {
       await el.play();
       setIsPlaying(true);
+      if (typeof onPlayed === "function") onPlayed(side);
     } catch (e) {
       console.error(e);
     }
@@ -811,10 +815,18 @@ export default function Deck({
               <button
                 onClick={() => onSync?.(side)}
                 disabled={!canSync || !bpm}
-                className="px-3 py-2 rounded-2xl bg-sky-500/80 text-black font-semibold disabled:opacity-40"
-                title="Iguala el BPM efectivo de este deck al del otro deck"
+                className={`px-3 py-2 rounded-2xl font-semibold disabled:opacity-40 ${
+                  syncActive
+                    ? "bg-emerald-500 text-black"
+                    : "bg-sky-500/80 text-black"
+                }`}
+                title={
+                  syncActive
+                    ? `Sync fijado: sigue el BPM de ${syncLabel} (el pitch se ajusta solo)`
+                    : "Activa sync continuo: este deck seguirá el BPM del otro deck o del master"
+                }
               >
-                SYNC
+                {syncActive ? `SYNC·${syncLabel}` : "SYNC"}
               </button>
               <button
                 onClick={() => setKeyLock(side, !keyLock)}
@@ -945,6 +957,7 @@ export default function Deck({
                 {bendPct.toFixed(2)}%
                 {keyLock && " · 🔒"}
               </span>
+              {/* Como un plato Technics: arriba más lento (−), abajo más rápido (+) */}
               <VerticalSlider
                 min={-pitchRange}
                 max={pitchRange}
@@ -953,7 +966,7 @@ export default function Deck({
                 onChange={(e) => onPitchChange(e.target.value)}
                 height={150}
                 width={20}
-                inverted={true}
+                inverted={false}
               />
             </div>
             <div className="flex items-center justify-center gap-1">

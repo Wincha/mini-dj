@@ -10,10 +10,11 @@ import Deck from "./components/Deck";
 import CentralMeters from "./components/CentralMeters";
 import Mixer from "./components/Mixer";
 import TrackList from "./components/TrackList";
-import BeatMatchPanel from "./components/BeatMatchPanel";
 import HeadphoneCue from "./components/HeadphoneCue";
+import ConfigDialog from "./components/ConfigDialog";
 
 const PITCH_RANGES = [8, 16, 50];
+const CONFIG_KEY = "mini-dj-config";
 
 export default function MiniDJMixer() {
   const engine = useMemo(() => new AudioEngine(), []);
@@ -29,6 +30,11 @@ export default function MiniDJMixer() {
   const [pitchPctB, setPitchPctB] = useState(0);
   const [bpms, setBpms] = useState({ A: null, B: null });
 
+  // Sync continuo por deck + master sync global
+  const [syncOn, setSyncOn] = useState({ A: false, B: false });
+  const [masterSyncOn, setMasterSyncOn] = useState(false);
+  const [masterBpm, setMasterBpm] = useState(128);
+
   // Rango y key lock por deck
   const [rangeA, setRangeA] = useState(8);
   const [rangeB, setRangeB] = useState(8);
@@ -40,6 +46,10 @@ export default function MiniDJMixer() {
   // Lista de canciones (crate) y pista cargada en cada deck
   const [tracks, setTracks] = useState([]);
   const [deckTracks, setDeckTracks] = useState({ A: null, B: null });
+  const deckTracksRef = useRef(deckTracks);
+  useEffect(() => {
+    deckTracksRef.current = deckTracks;
+  }, [deckTracks]);
 
   // Onda + beats por deck (para el panel de beat-match)
   const [deckAnalysis, setDeckAnalysis] = useState({ A: null, B: null });
@@ -48,6 +58,28 @@ export default function MiniDJMixer() {
   const [activeDeck, setActiveDeck] = useState("A");
   const deckRefs = useRef({ A: null, B: null });
   const audioElsRef = useRef({ A: null, B: null });
+
+  // Salidas dedicadas por deck (modo mezcla externa)
+  const deckOutARef = useRef(null);
+  const deckOutBRef = useRef(null);
+
+  // Configuración persistente (salidas de audio, modo de análisis)
+  const [config, setConfig] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(CONFIG_KEY)) || {};
+    } catch {
+      return {};
+    }
+  });
+  const [showConfig, setShowConfig] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    } catch {
+      // almacenamiento no disponible
+    }
+  }, [config]);
 
   // Cola de análisis en segundo plano para la lista
   const analysisBusyRef = useRef(false);
@@ -68,6 +100,41 @@ export default function MiniDJMixer() {
     engine.setDeckVolume("B", volB);
   }, [engine, volB]);
 
+  // === Aplicar salidas de audio de la config ===
+  useEffect(() => {
+    if (typeof engine.ctx.setSinkId !== "function") return;
+    engine.setMasterSink(config.masterOut || "").catch((err) => {
+      console.error("Master setSinkId failed", err);
+    });
+  }, [engine, config.masterOut]);
+
+  const applyDeckOutput = useCallback(
+    (side, deviceId, elRef) => {
+      const el = elRef.current;
+      if (deviceId) {
+        engine.setDeckOutput(side, true);
+        if (el) {
+          if (!el.srcObject) el.srcObject = engine.getDeckStream(side);
+          el.setSinkId?.(deviceId).catch((err) =>
+            console.error(`Deck ${side} setSinkId failed`, err)
+          );
+          el.play().catch(() => {});
+        }
+      } else {
+        engine.setDeckOutput(side, false);
+        el?.pause();
+      }
+    },
+    [engine]
+  );
+
+  useEffect(() => {
+    applyDeckOutput("A", config.deckAOut, deckOutARef);
+  }, [applyDeckOutput, config.deckAOut]);
+  useEffect(() => {
+    applyDeckOutput("B", config.deckBOut, deckOutBRef);
+  }, [applyDeckOutput, config.deckBOut]);
+
   // Cargar la lista guardada (IndexedDB) al arrancar
   useEffect(() => {
     let cancelled = false;
@@ -84,35 +151,56 @@ export default function MiniDJMixer() {
     };
   }, []);
 
-  // Analizar en segundo plano (una a una) las canciones sin BPM
+  // Analizar en segundo plano las canciones sin BPM: muy despacio para no
+  // laguear (espera 5s + momento de inactividad del navegador, de una en una)
   useEffect(() => {
+    if ((config.analysisMode || "auto") !== "auto") return;
     if (analysisBusyRef.current) return;
     const pending = tracks.find((t) => t.bpm == null && !t.analyzeFailed);
     if (!pending) return;
 
-    analysisBusyRef.current = true;
-    quickAnalyzeTrack(pending.file)
-      .then(({ bpm, duration }) => {
-        setTracks((prev) =>
-          prev.map((t) => (t.id === pending.id ? { ...t, bpm, duration } : t))
-        );
-        storeTrack({ ...pending, bpm, duration });
-      })
-      .catch((err) => {
-        console.error(`Analysis failed for ${pending.name}`, err);
-        // Solo en memoria: al recargar se reintenta
-        setTracks((prev) =>
-          prev.map((t) =>
-            t.id === pending.id ? { ...t, analyzeFailed: true } : t
-          )
-        );
-      })
-      .finally(() => {
-        analysisBusyRef.current = false;
-        // Dispara otra pasada para el siguiente pendiente
-        setTracks((prev) => [...prev]);
-      });
-  }, [tracks]);
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      analysisBusyRef.current = true;
+      quickAnalyzeTrack(pending.file)
+        .then(({ bpm, duration }) => {
+          setTracks((prev) =>
+            prev.map((t) => {
+              if (t.id !== pending.id) return t;
+              const updated = { ...t, bpm, duration };
+              storeTrack(updated);
+              return updated;
+            })
+          );
+        })
+        .catch((err) => {
+          console.error(`Analysis failed for ${pending.name}`, err);
+          // Solo en memoria: al recargar se reintenta
+          setTracks((prev) =>
+            prev.map((t) =>
+              t.id === pending.id ? { ...t, analyzeFailed: true } : t
+            )
+          );
+        })
+        .finally(() => {
+          analysisBusyRef.current = false;
+        });
+    };
+
+    const timerId = setTimeout(() => {
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(run, { timeout: 15000 });
+      } else {
+        run();
+      }
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timerId);
+    };
+  }, [tracks, config.analysisMode]);
 
   const onAttachEl = useCallback(
     (which, el) => {
@@ -148,8 +236,27 @@ export default function MiniDJMixer() {
     else setPitchPctB(v);
   };
 
+  // BPM detectado en un deck: actualiza sync y, si la pista vino de la lista,
+  // completa sus datos (útil en modo "analizar solo al cargar en deck")
   const onBpmDetected = useCallback((side, bpm) => {
     setBpms((prev) => ({ ...prev, [side]: bpm }));
+    if (!bpm) return;
+    const loaded = deckTracksRef.current[side];
+    if (!loaded) return;
+    const dur = audioElsRef.current[side]?.duration;
+    setTracks((prev) =>
+      prev.map((t) => {
+        if (t.id !== loaded.id) return t;
+        if (t.bpm === bpm && t.duration != null) return t;
+        const updated = {
+          ...t,
+          bpm,
+          duration: Number.isFinite(dur) && dur > 0 ? dur : t.duration,
+        };
+        storeTrack(updated);
+        return updated;
+      })
+    );
   }, []);
 
   const onAnalysis = useCallback((side, data) => {
@@ -159,30 +266,86 @@ export default function MiniDJMixer() {
     }));
   }, []);
 
-  // SYNC: iguala el BPM efectivo de este deck al del otro ajustando el pitch
+  // Marcar en la lista que la pista ya se pinchó en ese deck
+  const onPlayed = useCallback((side) => {
+    const loaded = deckTracksRef.current[side];
+    if (!loaded) return;
+    setTracks((prev) =>
+      prev.map((t) => {
+        if (t.id !== loaded.id) return t;
+        if (t.playedOn?.[side]) return t;
+        const updated = {
+          ...t,
+          playedOn: { ...(t.playedOn || {}), [side]: true },
+        };
+        storeTrack(updated);
+        return updated;
+      })
+    );
+  }, []);
+
+  // SYNC continuo: alterna el modo sync del deck
   const onSync = (side) => {
-    const other = side === "A" ? "B" : "A";
-    const ownBpm = bpms[side];
-    const otherBpm = bpms[other];
-    if (!ownBpm || !otherBpm) return;
-
-    const otherPitch = other === "A" ? pitchPctA : pitchPctB;
-    const targetBpm = otherBpm * (1 + otherPitch / 100);
-    let pitch = (targetBpm / ownBpm - 1) * 100;
-
-    // Ampliamos el rango si el pitch necesario no cabe en el actual
-    const currentRange = side === "A" ? rangeA : rangeB;
-    let range = currentRange;
-    if (Math.abs(pitch) > range) {
-      range =
-        PITCH_RANGES.find((r) => r >= Math.abs(pitch)) ??
-        PITCH_RANGES[PITCH_RANGES.length - 1];
-    }
-    pitch = Math.max(-range, Math.min(range, pitch));
-
-    setPitchRange(side, range);
-    setPitchPct(side, pitch);
+    setSyncOn((prev) => ({ ...prev, [side]: !prev[side] }));
   };
+
+  const onToggleMasterSync = () => {
+    setMasterSyncOn((prev) => {
+      const next = !prev;
+      if (next) {
+        // Al activarlo, parte del BPM efectivo actual de un deck si lo hay
+        const effA = bpms.A ? bpms.A * (1 + pitchPctA / 100) : null;
+        const effB = bpms.B ? bpms.B * (1 + pitchPctB / 100) : null;
+        const init = effA ?? effB;
+        if (init) setMasterBpm(Math.round(init));
+      }
+      return next;
+    });
+  };
+
+  // Motor de sync: mientras un deck tenga SYNC, su pitch se ajusta solo al
+  // objetivo (master BPM o BPM efectivo del otro deck)
+  useEffect(() => {
+    ["A", "B"].forEach((side) => {
+      if (!syncOn[side]) return;
+      const own = bpms[side];
+      if (!own) return;
+
+      let targetBpm;
+      if (masterSyncOn) {
+        targetBpm = masterBpm;
+      } else {
+        const other = side === "A" ? "B" : "A";
+        if (!bpms[other]) return;
+        const otherPitch = other === "A" ? pitchPctA : pitchPctB;
+        targetBpm = bpms[other] * (1 + otherPitch / 100);
+      }
+      if (!targetBpm) return;
+
+      let pitch = (targetBpm / own - 1) * 100;
+      const currentRange = side === "A" ? rangeA : rangeB;
+      let range = currentRange;
+      if (Math.abs(pitch) > range) {
+        range =
+          PITCH_RANGES.find((r) => r >= Math.abs(pitch)) ??
+          PITCH_RANGES[PITCH_RANGES.length - 1];
+      }
+      pitch = Math.max(-range, Math.min(range, pitch));
+
+      const cur = side === "A" ? pitchPctA : pitchPctB;
+      if (range !== currentRange) setPitchRange(side, range);
+      if (Math.abs(pitch - cur) > 0.005) setPitchPct(side, pitch);
+    });
+  }, [
+    syncOn,
+    masterSyncOn,
+    masterBpm,
+    bpms,
+    pitchPctA,
+    pitchPctB,
+    rangeA,
+    rangeB,
+  ]);
 
   const onAddTracks = (files) => {
     setTracks((prev) => {
@@ -199,6 +362,7 @@ export default function MiniDJMixer() {
             file,
             bpm: null,
             duration: null,
+            playedOn: {},
           };
           next.push(track);
           storeTrack(track);
@@ -297,13 +461,29 @@ export default function MiniDJMixer() {
     };
   }, [activeDeck]);
 
-  const canSync = Boolean(bpms.A && bpms.B);
+  const syncLabel = (side) =>
+    masterSyncOn ? "MST" : side === "A" ? "B" : "A";
+  const canSyncFor = (side) => {
+    const other = side === "A" ? "B" : "A";
+    return Boolean(bpms[side] && (masterSyncOn || bpms[other]));
+  };
 
   return (
     <div className="min-h-screen w-full bg-neutral-950 text-neutral-100 p-3 sm:p-6">
       <div className="mx-auto grid gap-4 sm:gap-6">
-        {/* Panel central */}
-        <CentralMeters engine={engine} master={master} setMaster={setMaster} />
+        {/* Cabecera: título + REC | beat match | master + master sync */}
+        <CentralMeters
+          engine={engine}
+          master={master}
+          setMaster={setMaster}
+          analysis={deckAnalysis}
+          audioElsRef={audioElsRef}
+          masterSyncOn={masterSyncOn}
+          onToggleMasterSync={onToggleMasterSync}
+          masterBpm={masterBpm}
+          setMasterBpm={setMasterBpm}
+          onOpenConfig={() => setShowConfig(true)}
+        />
 
         {/* Decks */}
         <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
@@ -328,7 +508,10 @@ export default function MiniDJMixer() {
             onBpmDetected={onBpmDetected}
             onAnalysis={onAnalysis}
             onSync={onSync}
-            canSync={canSync}
+            canSync={canSyncFor("A")}
+            syncActive={syncOn.A}
+            syncLabel={syncLabel("A")}
+            onPlayed={onPlayed}
             externalTrack={deckTracks.A}
             isActive={activeDeck === "A"}
             onActivate={setActiveDeck}
@@ -365,7 +548,10 @@ export default function MiniDJMixer() {
             onBpmDetected={onBpmDetected}
             onAnalysis={onAnalysis}
             onSync={onSync}
-            canSync={canSync}
+            canSync={canSyncFor("B")}
+            syncActive={syncOn.B}
+            syncLabel={syncLabel("B")}
+            onPlayed={onPlayed}
             externalTrack={deckTracks.B}
             isActive={activeDeck === "B"}
             onActivate={setActiveDeck}
@@ -375,11 +561,8 @@ export default function MiniDJMixer() {
           />
         </div>
 
-        {/* Beat match + pre-escucha */}
-        <div className="grid lg:grid-cols-2 gap-4 sm:gap-6">
-          <BeatMatchPanel analysis={deckAnalysis} audioElsRef={audioElsRef} />
-          <HeadphoneCue engine={engine} />
-        </div>
+        {/* Pre-escucha */}
+        <HeadphoneCue engine={engine} cueDeviceId={config.cueOut} />
 
         {/* Lista de canciones */}
         <TrackList
@@ -397,6 +580,17 @@ export default function MiniDJMixer() {
           loop on/off · ←/→: nudge
         </p>
       </div>
+
+      {/* Salidas dedicadas por deck (modo mezcla externa) */}
+      <audio ref={deckOutARef} className="hidden" />
+      <audio ref={deckOutBRef} className="hidden" />
+
+      <ConfigDialog
+        open={showConfig}
+        onClose={() => setShowConfig(false)}
+        config={config}
+        onConfigChange={setConfig}
+      />
     </div>
   );
 }

@@ -9,7 +9,8 @@ Mini two‑deck DJ experiment built with React, Vite and Tailwind. Load local au
 - Per‑deck EQ block (gain/high/mid/low) plus optional auto‑gain that normalizes loudness to a target level per track.
 - Mixer with equal‑power crossfader, deck volume faders, and VU meters for each deck and the mix bus.
 - Master output trim with gentle AGC (auto level) to prevent clipping while keeping the mix loud.
-- One‑click SYNC per deck: matches the effective BPM of the other deck by adjusting pitch (auto‑expands the pitch range if needed).
+- Continuous SYNC per deck: while engaged the deck keeps following its tempo source — the other deck's effective BPM, or the adjustable Master Sync BPM — and the button shows which one (SYNC·A/B or SYNC·MST). Pitch range auto‑expands as needed.
+- Pitch fader behaves like a Technics turntable: up is slower, down is faster.
 - CUE points: positioning the track while paused sets the cue; Stop returns to it. Auto‑cue lands on the first sound / first detected beat, with an orange marker on the waveform.
 - Vinyl‑style waveform dragging: while paused, push the wave to position the track under the playhead; while playing, dragging nudges the tempo like a pitch bend.
 - Analysis feedback: the waveform area shows "Analizando pista…" and "Detectando BPM…" while a track is being processed.
@@ -17,9 +18,10 @@ Mini two‑deck DJ experiment built with React, Vite and Tailwind. Load local au
 - 3 hot cues per deck (right‑click clears) and loops: manual IN/OUT plus auto 4/8‑beat loops snapped to the beat grid, drawn on the waveform.
 - Keyboard shortcuts on the active deck (click a deck or Q/P to switch): Space play/pause, C cue/stop, 1‑3 hot cues, I/O loop in/out, L loop toggle, ←/→ nudge.
 - Beat‑match panel: both decks' waveforms and beat markers around the playhead to line them up visually.
-- Headphone pre‑listen (PFL) per deck with output device selection (`setSinkId`) and its own volume.
+- Headphone pre‑listen (PFL) per deck with its own volume.
+- Config dialog (⚙): pick the sound card/output for the master mix, the headphone cue, and optionally a dedicated output per deck (external‑mixer mode); choose whether list tracks are analyzed automatically or only when loaded to a deck.
 - Session recording: record the master mix and download it as `.webm`.
-- The track list persists in IndexedDB and analyzes BPM/duration of each song in the background.
+- The track list persists in IndexedDB, analyzes BPM/duration slowly in the background (idle time, one at a time), marks which deck each song was played on, and can be exported as CSV.
 - Track list (crate): add multiple songs, load them to Deck A/B with one click, with badges showing what's loaded where.
 - Responsive layout: works down to phone widths (decks stack, mixer moves below).
 

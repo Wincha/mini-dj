@@ -43,8 +43,18 @@ export async function loadStoredTracks() {
 
 export async function storeTrack(track) {
   try {
-    const { id, name, size, file, bpm = null, duration = null } = track;
-    await withStore("readwrite", (s) => s.put({ id, name, size, file, bpm, duration }));
+    const {
+      id,
+      name,
+      size,
+      file,
+      bpm = null,
+      duration = null,
+      playedOn = {},
+    } = track;
+    await withStore("readwrite", (s) =>
+      s.put({ id, name, size, file, bpm, duration, playedOn })
+    );
   } catch (err) {
     console.error("IndexedDB save failed", err);
   }

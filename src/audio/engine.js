@@ -136,6 +136,41 @@ export class AudioEngine {
     this.masterGain.gain.value = vol;
   }
 
+  // === Ruteo de salidas (config multi-tarjeta) ===
+  // Cambia el dispositivo de salida del mix master (Chrome 110+)
+  setMasterSink(deviceId) {
+    if (typeof this.ctx.setSinkId !== "function") {
+      return Promise.reject(new Error("AudioContext.setSinkId no soportado"));
+    }
+    return this.ctx.setSinkId(deviceId || "");
+  }
+
+  _ensureDirectDest(deck) {
+    if (!deck.directDest) {
+      deck.directDest = this.ctx.createMediaStreamDestination();
+    }
+    return deck.directDest;
+  }
+
+  // direct=true saca el deck por su propio stream (salida dedicada)
+  // en vez de por el master (modo mezcla externa)
+  setDeckOutput(which, direct) {
+    const deck = which === "A" ? this.deckA : this.deckB;
+    this._ensureDirectDest(deck);
+    try {
+      deck.analyser.disconnect();
+    } catch {
+      // sin conexiones previas
+    }
+    if (direct) deck.analyser.connect(deck.directDest);
+    else deck.analyser.connect(this.masterGain);
+  }
+
+  getDeckStream(which) {
+    const deck = which === "A" ? this.deckA : this.deckB;
+    return this._ensureDirectDest(deck).stream;
+  }
+
   // === PFL / pre-escucha por auriculares ===
   setDeckCue(which, on) {
     const deck = which === "A" ? this.deckA : this.deckB;

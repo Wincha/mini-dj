@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import HorizontalSlider from "./HorizontalSlider";
 import VUBar from "./VUBar";
+import BeatMatchPanel from "./BeatMatchPanel";
 
 function formatRecTime(s) {
   const m = Math.floor(s / 60);
@@ -8,7 +9,18 @@ function formatRecTime(s) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-export default function CentralMeters({ engine, master, setMaster }) {
+export default function CentralMeters({
+  engine,
+  master,
+  setMaster,
+  analysis,
+  audioElsRef,
+  masterSyncOn,
+  onToggleMasterSync,
+  masterBpm,
+  setMasterBpm,
+  onOpenConfig,
+}) {
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
   const recorderRef = useRef(null);
@@ -61,43 +73,103 @@ export default function CentralMeters({ engine, master, setMaster }) {
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-between rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 shadow-xl gap-4 sm:gap-6">
-      <header className="flex items-end justify-between">
-        <div>
+    <div className="flex flex-wrap items-center rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 shadow-xl gap-4 sm:gap-6">
+      {/* Título + REC */}
+      <header className="shrink-0">
+        <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">
             Mini DJ Mixer
           </h1>
-          <p className="text-sm text-neutral-400">
-            by Dj Wincha (Under construction)
-          </p>
+          {recSupported && (
+            <button
+              onClick={toggleRecording}
+              className={`px-3 py-1.5 rounded-xl text-sm font-semibold border ${
+                recording
+                  ? "bg-red-500 text-white border-red-400 animate-pulse"
+                  : "bg-neutral-800 text-neutral-200 border-neutral-700"
+              }`}
+              title="Graba el mix master; al parar se descarga como .webm"
+            >
+              {recording ? `■ ${formatRecTime(recSeconds)}` : "● REC"}
+            </button>
+          )}
         </div>
+        <p className="text-sm text-neutral-400">
+          by Dj Wincha (Under construction)
+        </p>
       </header>
-      {/* Grabación de la sesión */}
-      {recSupported && (
-        <button
-          onClick={toggleRecording}
-          className={`px-3 py-2 rounded-xl text-sm font-semibold border ${
-            recording
-              ? "bg-red-500 text-white border-red-400 animate-pulse"
-              : "bg-neutral-800 text-neutral-200 border-neutral-700"
-          }`}
-          title="Graba el mix master; al parar se descarga como .webm"
-        >
-          {recording ? `■ ${formatRecTime(recSeconds)}` : "● REC"}
-        </button>
-      )}
-      {/* Master volume (horizontal) */}
-      <div className="flex flex-col gap-2 w-full max-w-md min-w-48">
-        <span className="text-xs text-neutral-400">Master</span>
+
+      {/* Beat match centrado y bien visible */}
+      <div className="flex-1 min-w-64">
+        <BeatMatchPanel analysis={analysis} audioElsRef={audioElsRef} />
+      </div>
+
+      {/* Master compacto + Master Sync + Config */}
+      <div className="flex flex-col gap-2 w-full sm:w-64 shrink-0">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-neutral-400">Master</span>
+          <button
+            onClick={onOpenConfig}
+            className="px-2 py-0.5 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-300 hover:bg-neutral-700"
+            title="Configuración: salidas de audio y análisis"
+          >
+            ⚙
+          </button>
+        </div>
         <HorizontalSlider
           min={0}
           max={1}
           step={0.01}
           value={master}
           onChange={(e) => setMaster(Number(e.target.value))}
-          className="w-full" // si tu componente lo soporta
+          className="w-full"
         />
         <VUBar engine={engine} side="Both" direction="horizontal" />
+        {/* Master Sync */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onToggleMasterSync}
+            className={`px-2 py-1 rounded-lg text-xs font-semibold border ${
+              masterSyncOn
+                ? "bg-emerald-500 text-black border-emerald-400"
+                : "bg-neutral-800 text-neutral-300 border-neutral-700"
+            }`}
+            title="Master sync: los decks con SYNC siguen este BPM en vez del otro deck"
+          >
+            MASTER SYNC
+          </button>
+          <div
+            className={`flex items-center gap-1 ${
+              masterSyncOn ? "" : "opacity-40 pointer-events-none"
+            }`}
+          >
+            <button
+              onClick={() => setMasterBpm(Math.max(40, masterBpm - 1))}
+              className="w-6 h-6 rounded bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs"
+            >
+              −
+            </button>
+            <input
+              type="number"
+              min={40}
+              max={220}
+              value={masterBpm}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v)) setMasterBpm(Math.min(220, Math.max(40, v)));
+              }}
+              className="w-14 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-center text-xs text-neutral-200"
+              title="BPM del master sync"
+            />
+            <button
+              onClick={() => setMasterBpm(Math.min(220, masterBpm + 1))}
+              className="w-6 h-6 rounded bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs"
+            >
+              +
+            </button>
+            <span className="text-[10px] text-neutral-500">BPM</span>
+          </div>
+        </div>
       </div>
     </div>
   );
