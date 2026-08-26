@@ -17,8 +17,24 @@ export default function WaveformCanvas({
   onDragSeek,
   onNudge,
   onNudgeEnd,
+  onWheelZoom,
 }) {
   const canvasRef = useRef(null);
+
+  // Zoom con la rueda del ratón (listener nativo: React registra wheel como
+  // pasivo y no dejaría hacer preventDefault del scroll de la página)
+  const wheelCbRef = useRef(onWheelZoom);
+  wheelCbRef.current = onWheelZoom;
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      wheelCbRef.current?.(e.deltaY < 0 ? 1 : -1);
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, []);
 
   // Estado del arrastre (no necesita re-render)
   const dragRef = useRef({

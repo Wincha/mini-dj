@@ -6,7 +6,10 @@ Mini two‑deck DJ experiment built with React, Vite and Tailwind. Load local au
 - Two independent decks with file input, transport (play/pause/stop), elapsed/remaining toggle, and smooth seeking on the waveform.
 - Waveform rendering with zoom, follow mode, manual scroll, click‑to‑seek, and beat markers from automatic BPM detection; manual tap BPM on the display.
 - Pitch fader with selectable range (±8/16/50%), momentary pitch bend buttons, and live BPM readout that reflects tempo changes.
-- Per‑deck EQ block (gain/high/mid/low) plus optional auto‑gain that normalizes loudness to a target level per track.
+- Per‑deck EQ block (gain/high/mid/low) plus optional auto‑gain that normalizes loudness to a target level per track. Right‑click an EQ knob for a band kill; double‑click resets it.
+- DJ filter knob per deck: one control sweeping LPF (left) ↔ HPF (right), off at center.
+- Quantize (Q, on by default): hot cues, loop in/out and beat jumps snap to the nearest beat of the grid.
+- Track list search box and sorting by name/BPM/duration; mouse wheel zooms the waveform.
 - Mixer with equal‑power crossfader, deck volume faders, and VU meters for each deck and the mix bus.
 - Master output trim with gentle AGC (auto level) to prevent clipping while keeping the mix loud.
 - Continuous SYNC per deck: while engaged the deck keeps following its tempo source — the other deck's effective BPM, or the adjustable Master Sync BPM — and the button shows which one (SYNC·A/B or SYNC·MST). Pitch range auto‑expands as needed.

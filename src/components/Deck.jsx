@@ -478,6 +478,22 @@ export default function Deck({
     setBendPct(Math.max(-NUDGE_MAX, Math.min(NUDGE_MAX, pct)));
   };
 
+  // === Quantize: imanta cues/loops/saltos al beat más cercano ===
+  const [quantize, setQuantize] = useState(true);
+  const snapToGrid = (t) => {
+    if (!quantize || !beats.length) return t;
+    let best = t;
+    let bestD = Infinity;
+    for (const b of beats) {
+      const d = Math.abs(b - t);
+      if (d < bestD) {
+        bestD = d;
+        best = b;
+      }
+    }
+    return best;
+  };
+
   // === Beat jump (estilo Traktor): salto de N beats adelante/atrás ===
   const [jumpBeats, setJumpBeats] = useState(4);
   const beatJump = (dir) => {
@@ -485,7 +501,8 @@ export default function Deck({
     if (!el || !bpm) return;
     const dt = dir * jumpBeats * (60 / bpm);
     const dur = duration || el.duration || 0;
-    const t = Math.max(0, Math.min(Math.max(0, dur - 0.01), (el.currentTime || 0) + dt));
+    const base = snapToGrid(el.currentTime || 0);
+    const t = Math.max(0, Math.min(Math.max(0, dur - 0.01), base + dt));
     el.currentTime = t;
     setCurrent(t);
     setCueIfPaused(t);
@@ -498,7 +515,7 @@ export default function Deck({
     const t = hotCues[i];
     if (t == null) {
       const next = [...hotCues];
-      next[i] = el.currentTime || 0;
+      next[i] = snapToGrid(el.currentTime || 0);
       setHotCues(next);
     } else {
       el.currentTime = t;
@@ -518,7 +535,7 @@ export default function Deck({
   const setLoopInNow = () => {
     const el = audioRef.current;
     if (!el || !objectUrl) return;
-    setLoopIn(el.currentTime || 0);
+    setLoopIn(snapToGrid(el.currentTime || 0));
     setLoopOut(null);
     setLoopOn(false);
   };
@@ -526,7 +543,10 @@ export default function Deck({
   const setLoopOutNow = () => {
     const el = audioRef.current;
     if (!el || loopIn == null) return;
-    const t = el.currentTime || 0;
+    const raw = el.currentTime || 0;
+    const snapped = snapToGrid(raw);
+    // si el snap lo dejaría pegado o antes del IN, usar el punto crudo
+    const t = snapped > loopIn + 0.05 ? snapped : raw;
     if (t <= loopIn + 0.05) return;
     setLoopOut(t);
     setLoopOn(true);
@@ -767,6 +787,11 @@ export default function Deck({
                 onDragSeek={onDragSeek}
                 onNudge={onNudge}
                 onNudgeEnd={releaseBend}
+                onWheelZoom={(dir) =>
+                  setZoom((z) =>
+                    Math.max(1, Math.min(256, dir > 0 ? z * 2 : z / 2))
+                  )
+                }
               />
               {/* Feedback de análisis */}
               {analyzing === "wave" && (
@@ -960,6 +985,18 @@ export default function Deck({
                   title="Pulsa al ritmo mientras suena: reancla la rejilla de beats en cada tap y con varios taps recalcula el BPM"
                 >
                   TAP
+                </button>
+                <button
+                  onClick={() => setQuantize((q) => !q)}
+                  disabled={!objectUrl}
+                  className={`px-2 py-1 rounded-lg border font-bold disabled:opacity-40 ${
+                    quantize
+                      ? "bg-violet-500/80 border-violet-400 text-black"
+                      : "bg-neutral-800 border-neutral-700 text-neutral-400"
+                  }`}
+                  title="Quantize: imanta hot cues, loops y saltos al beat más cercano de la rejilla"
+                >
+                  Q
                 </button>
               </div>
               <div className="flex items-center gap-1">

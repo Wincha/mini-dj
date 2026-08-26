@@ -215,10 +215,10 @@ export default function MiniDJMixer() {
     else setVolB(v);
   };
 
+  // El Mixer aplica el EQ efectivo al grafo (incluye los kills de banda)
   const setEq = (which, vals) => {
     if (which === "A") setEqA(vals);
     else setEqB(vals);
-    engine.setDeckEQ(which, vals); // ← aplica en el grafo
   };
 
   const setPitchRange = (which, r) => {

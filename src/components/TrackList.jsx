@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 
 function formatSize(bytes) {
   if (!Number.isFinite(bytes)) return "";
@@ -21,6 +21,30 @@ export default function TrackList({
   onRemoveTrack,
 }) {
   const inputRef = useRef(null);
+
+  // Búsqueda y ordenación
+  const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState("added");
+  const [sortDir, setSortDir] = useState(1);
+
+  const visibleTracks = useMemo(() => {
+    let list = tracks;
+    const q = query.trim().toLowerCase();
+    if (q) list = list.filter((t) => t.name.toLowerCase().includes(q));
+    if (sortBy !== "added") {
+      list = [...list].sort((a, b) => {
+        let r = 0;
+        if (sortBy === "name") r = a.name.localeCompare(b.name);
+        else if (sortBy === "bpm") r = (a.bpm ?? 1e9) - (b.bpm ?? 1e9);
+        else if (sortBy === "duration")
+          r = (a.duration ?? 1e9) - (b.duration ?? 1e9);
+        return r * sortDir;
+      });
+    } else if (sortDir === -1) {
+      list = [...list].reverse();
+    }
+    return list;
+  }, [tracks, query, sortBy, sortDir]);
 
   const onFiles = (e) => {
     const files = Array.from(e.target.files || []);
@@ -75,6 +99,35 @@ export default function TrackList({
     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 sm:p-5 shadow-xl">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <h2 className="text-lg font-semibold tracking-tight">Canciones</h2>
+        {tracks.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar…"
+              className="w-40 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-500"
+            />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1.5 text-sm text-neutral-300"
+              title="Ordenar por"
+            >
+              <option value="added">Añadido</option>
+              <option value="name">Nombre</option>
+              <option value="bpm">BPM</option>
+              <option value="duration">Duración</option>
+            </select>
+            <button
+              onClick={() => setSortDir((d) => -d)}
+              className="px-2 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-sm text-neutral-300 hover:bg-neutral-700"
+              title="Invertir orden"
+            >
+              {sortDir === 1 ? "↑" : "↓"}
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           {tracks.length > 0 && (
             <button
@@ -106,9 +159,13 @@ export default function TrackList({
         <p className="text-sm text-neutral-500">
           Añade canciones para cargarlas en los decks A o B.
         </p>
+      ) : visibleTracks.length === 0 ? (
+        <p className="text-sm text-neutral-500">
+          Ninguna canción coincide con "{query}".
+        </p>
       ) : (
         <ul className="divide-y divide-neutral-800 max-h-64 overflow-y-auto">
-          {tracks.map((track) => (
+          {visibleTracks.map((track) => (
             <li
               key={track.id}
               className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2"

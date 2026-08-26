@@ -37,6 +37,7 @@ export class AudioEngine {
       const low = this.ctx.createBiquadFilter(); // low-shelf 100 Hz
       const mid = this.ctx.createBiquadFilter(); // peaking 1 kHz
       const high = this.ctx.createBiquadFilter(); // high-shelf 10 kHz
+      const filter = this.ctx.createBiquadFilter(); // filtro DJ LPF↔HPF
 
       low.type = "lowshelf";
       low.frequency.value = 100;
@@ -48,7 +49,12 @@ export class AudioEngine {
       high.type = "highshelf";
       high.frequency.value = 10000;
 
-      return { eqPreGain, low, mid, high };
+      // bypass: peaking con ganancia 0 es transparente
+      filter.type = "peaking";
+      filter.frequency.value = 1000;
+      filter.gain.value = 0;
+
+      return { eqPreGain, low, mid, high, filter };
     };
 
     this.deckA = {
@@ -80,22 +86,24 @@ export class AudioEngine {
     this.deckA.eqPreGain.connect(this.deckA.low);
     this.deckA.low.connect(this.deckA.mid);
     this.deckA.mid.connect(this.deckA.high);
-    this.deckA.high.connect(this.deckA.preGain);
+    this.deckA.high.connect(this.deckA.filter);
+    this.deckA.filter.connect(this.deckA.preGain);
     this.deckA.preGain.connect(this.deckA.xfGain);
     this.deckA.xfGain.connect(this.deckA.analyser);
     this.deckA.analyser.connect(this.masterGain);
-    this.deckA.high.connect(this.deckA.cueGain); // PFL pre-fader
+    this.deckA.filter.connect(this.deckA.cueGain); // PFL pre-fader, post-EQ/filtro
     this.deckA.cueGain.connect(this.cueBus);
 
     // Conexiones por deck (B)
     this.deckB.eqPreGain.connect(this.deckB.low);
     this.deckB.low.connect(this.deckB.mid);
     this.deckB.mid.connect(this.deckB.high);
-    this.deckB.high.connect(this.deckB.preGain);
+    this.deckB.high.connect(this.deckB.filter);
+    this.deckB.filter.connect(this.deckB.preGain);
     this.deckB.preGain.connect(this.deckB.xfGain);
     this.deckB.xfGain.connect(this.deckB.analyser);
     this.deckB.analyser.connect(this.masterGain);
-    this.deckB.high.connect(this.deckB.cueGain);
+    this.deckB.filter.connect(this.deckB.cueGain);
     this.deckB.cueGain.connect(this.cueBus);
 
     // Ajuste de analyser (ligero)
@@ -169,6 +177,27 @@ export class AudioEngine {
   getDeckStream(which) {
     const deck = which === "A" ? this.deckA : this.deckB;
     return this._ensureDirectDest(deck).stream;
+  }
+
+  // === Filtro DJ por deck: un solo control LPF↔HPF ===
+  // v ∈ [-1, 1]: negativo = lowpass (barre hacia graves), 0 = off,
+  // positivo = highpass (barre hacia agudos)
+  setDeckFilter(which, v) {
+    const deck = which === "A" ? this.deckA : this.deckB;
+    const f = deck.filter;
+    if (Math.abs(v) < 0.05) {
+      f.type = "peaking";
+      f.gain.value = 0; // transparente
+      return;
+    }
+    f.Q.value = 1.2; // algo de resonancia, tacto de mesa DJ
+    if (v < 0) {
+      f.type = "lowpass";
+      f.frequency.value = 20000 * Math.pow(80 / 20000, -v); // 20k → 80 Hz
+    } else {
+      f.type = "highpass";
+      f.frequency.value = 20 * Math.pow(8000 / 20, v); // 20 → 8k Hz
+    }
   }
 
   // === PFL / pre-escucha por auriculares ===
