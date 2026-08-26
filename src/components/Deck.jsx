@@ -48,7 +48,6 @@ export default function Deck({
   const [zoom, setZoom] = useState(64);
   const [scroll, setScroll] = useState(0);
   const [follow, setFollow] = useState(true);
-  const [isBeatDetectorReady, setBeatDetectorReady] = useState(false);
 
   const [fileName, setFileName] = useState("");
   const [objectUrl, setObjectUrl] = useState("");
@@ -247,45 +246,65 @@ export default function Deck({
   // Instancia única del detector de beats (solo en cliente)
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (beatDetectorRef.current) {
-      setBeatDetectorReady(true);
-      return;
-    }
+    if (beatDetectorRef.current) return;
     try {
       beatDetectorRef.current = new BeatDetect({
         sampleRate: engine?.ctx?.sampleRate || 44100,
       });
-      setBeatDetectorReady(true);
     } catch (err) {
       console.error("Unable to init BeatDetect", err);
     }
   }, [engine]);
 
-  // Soporte de TAP BPM manual sobre el display
-  useEffect(() => {
-    const detector = beatDetectorRef.current;
-    const element = bpmDisplayRef.current;
-    if (!isBeatDetectorReady || !detector || !element) return;
+  // === TAP de rejilla (estilo Traktor) ===
+  // Pulsando al ritmo mientras suena: cada tap reancla la rejilla de beats a
+  // ese instante, y con 2+ taps se recalcula el BPM. Los taps se guardan en
+  // TIEMPO DE PISTA, así el pitch no falsea el cálculo.
+  const tapRef = useRef({ taps: [], lastWall: 0 });
 
-    const cleanup = detector.tapBpm({
-      element,
-      precision: 1,
-      callback: (value) => {
-        if (value === "--") return;
-        const numeric = Number(value);
-        if (Number.isFinite(numeric)) {
-          updateBpm(numeric);
-        }
-      },
-    });
+  const rebuildGrid = (anchor, interval) => {
+    const dur = duration || audioRef.current?.duration || 0;
+    if (!(dur > 0) || !(interval > 0)) return;
+    // primer beat >= 0 en fase con el ancla
+    const start = anchor - Math.floor(anchor / interval) * interval;
+    const arr = [];
+    for (let t = start; t < dur; t += interval) arr.push(t);
+    setBeats(arr);
+    if (typeof onAnalysis === "function") onAnalysis(side, { beats: arr });
+  };
 
-    return () => {
-      if (typeof cleanup === "function") {
-        cleanup();
+  const onTapBeat = () => {
+    const el = audioRef.current;
+    if (!el || !objectUrl) return;
+    const now = performance.now();
+    const st = tapRef.current;
+    // una pausa larga entre taps empieza una secuencia nueva
+    if (now - st.lastWall > 2500) st.taps = [];
+    st.lastWall = now;
+    st.taps.push(el.currentTime || 0);
+    if (st.taps.length > 16) st.taps.shift();
+
+    const taps = st.taps;
+    const anchor = taps[taps.length - 1];
+
+    let interval = bpm ? 60 / bpm : null;
+    if (taps.length >= 2) {
+      const ivs = [];
+      for (let i = 1; i < taps.length; i++) {
+        const d = taps[i] - taps[i - 1];
+        if (d > 0.2 && d < 2.5) ivs.push(d); // 24–300 BPM plausibles
       }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isBeatDetectorReady]);
+      if (ivs.length) {
+        ivs.sort((a, b) => a - b);
+        const mid = Math.floor(ivs.length / 2);
+        interval =
+          ivs.length % 2 ? ivs[mid] : (ivs[mid - 1] + ivs[mid]) / 2;
+        updateBpm(Math.round((60 / interval) * 10) / 10);
+      }
+    }
+    if (!interval) return; // sin BPM previo y con un solo tap no hay rejilla
+    rebuildGrid(anchor, interval);
+  };
 
   // conectar el mediaElement al engine + listeners básicos del <audio>
   useEffect(() => {
@@ -702,8 +721,9 @@ export default function Deck({
                 <div>{calcDuration(duration)}</div>
                 <div
                   ref={bpmDisplayRef}
+                  onClick={onTapBeat}
                   className="cursor-pointer select-none"
-                  title="Haz click para tap BPM manualmente"
+                  title="Haz click al ritmo (TAP): reancla la rejilla de beats y recalcula el BPM"
                 >
                   {runningBpm
                     ? `${runningBpm.toFixed(1)} BPM`
@@ -943,6 +963,14 @@ export default function Deck({
                   title={`Salta ${jumpBeats} beats hacia delante`}
                 >
                   »
+                </button>
+                <button
+                  onClick={onTapBeat}
+                  disabled={!objectUrl}
+                  className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-semibold active:bg-orange-400 active:text-black disabled:opacity-40"
+                  title="Pulsa al ritmo mientras suena: reancla la rejilla de beats en cada tap y con varios taps recalcula el BPM"
+                >
+                  TAP
                 </button>
               </div>
               <div className="flex items-center gap-1 ml-auto">

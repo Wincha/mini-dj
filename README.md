@@ -17,6 +17,7 @@ Mini two‑deck DJ experiment built with React, Vite and Tailwind. Load local au
 - Key lock per deck (`preservesPitch`): keep the musical key while changing tempo; off = vinyl mode.
 - 3 hot cues per deck (right‑click or Shift+click clears) and loops: manual IN/OUT plus auto 4/8‑beat loops snapped to the beat grid, drawn on the waveform.
 - Traktor‑style beat jump: selectable size (1–32 beats) with « / » buttons to jump backward or forward.
+- Grid TAP: tap the TAP button (or the BPM display) on the beats while the track plays — each tap re‑anchors the beat grid in real time, and several taps recompute the BPM (taps are measured in track time, so pitch doesn't skew it).
 - Keyboard shortcuts on the active deck (click a deck or Q/P to switch): Space play/pause, C cue/stop, 1‑3 hot cues, I/O loop in/out, L loop toggle, ←/→ nudge.
 - Beat‑match panel: both decks' waveforms and beat markers around the playhead to line them up visually.
 - Headphone pre‑listen (PFL) per deck with its own volume.
