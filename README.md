@@ -15,7 +15,8 @@ Mini two‑deck DJ experiment built with React, Vite and Tailwind. Load local au
 - Vinyl‑style waveform dragging: while paused, push the wave to position the track under the playhead; while playing, dragging nudges the tempo like a pitch bend.
 - Analysis feedback: the waveform area shows "Analizando pista…" and "Detectando BPM…" while a track is being processed.
 - Key lock per deck (`preservesPitch`): keep the musical key while changing tempo; off = vinyl mode.
-- 3 hot cues per deck (right‑click clears) and loops: manual IN/OUT plus auto 4/8‑beat loops snapped to the beat grid, drawn on the waveform.
+- 3 hot cues per deck (right‑click or Shift+click clears) and loops: manual IN/OUT plus auto 4/8‑beat loops snapped to the beat grid, drawn on the waveform.
+- Traktor‑style beat jump: selectable size (1–32 beats) with « / » buttons to jump backward or forward.
 - Keyboard shortcuts on the active deck (click a deck or Q/P to switch): Space play/pause, C cue/stop, 1‑3 hot cues, I/O loop in/out, L loop toggle, ←/→ nudge.
 - Beat‑match panel: both decks' waveforms and beat markers around the playhead to line them up visually.
 - Headphone pre‑listen (PFL) per deck with its own volume.

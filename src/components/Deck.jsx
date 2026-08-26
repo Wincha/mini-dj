@@ -459,6 +459,19 @@ export default function Deck({
     setBendPct(Math.max(-NUDGE_MAX, Math.min(NUDGE_MAX, pct)));
   };
 
+  // === Beat jump (estilo Traktor): salto de N beats adelante/atrás ===
+  const [jumpBeats, setJumpBeats] = useState(4);
+  const beatJump = (dir) => {
+    const el = audioRef.current;
+    if (!el || !bpm) return;
+    const dt = dir * jumpBeats * (60 / bpm);
+    const dur = duration || el.duration || 0;
+    const t = Math.max(0, Math.min(Math.max(0, dur - 0.01), (el.currentTime || 0) + dt));
+    el.currentTime = t;
+    setCurrent(t);
+    setCueIfPaused(t);
+  };
+
   // === Hot cues ===
   const triggerHotCue = (i) => {
     const el = audioRef.current;
@@ -866,7 +879,10 @@ export default function Deck({
                 {hotCues.map((t, i) => (
                   <button
                     key={i}
-                    onClick={() => triggerHotCue(i)}
+                    onClick={(e) => {
+                      if (e.shiftKey) clearHotCue(i);
+                      else triggerHotCue(i);
+                    }}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       clearHotCue(i);
@@ -888,13 +904,46 @@ export default function Deck({
                     }
                     title={
                       t != null
-                        ? `Hot cue ${i + 1}: saltar a ${calcDuration(t)} (click dcho borra)`
+                        ? `Hot cue ${i + 1}: saltar a ${calcDuration(t)} · borrar con click derecho o Shift+click`
                         : `Hot cue ${i + 1}: fijar en la posición actual`
                     }
                   >
                     {i + 1}
                   </button>
                 ))}
+              </div>
+              {/* Beat jump */}
+              <div className="flex items-center gap-1">
+                <span className="text-neutral-500 mr-1">Jump</span>
+                <button
+                  onClick={() => beatJump(-1)}
+                  disabled={!objectUrl || !bpm}
+                  className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-bold disabled:opacity-40"
+                  title={`Salta ${jumpBeats} beats hacia atrás`}
+                >
+                  «
+                </button>
+                <select
+                  value={jumpBeats}
+                  onChange={(e) => setJumpBeats(Number(e.target.value))}
+                  disabled={!objectUrl || !bpm}
+                  className="bg-neutral-800 border border-neutral-700 rounded-lg px-1 py-1 disabled:opacity-40"
+                  title="Tamaño del salto en beats"
+                >
+                  {[1, 2, 4, 8, 16, 32].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => beatJump(+1)}
+                  disabled={!objectUrl || !bpm}
+                  className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-bold disabled:opacity-40"
+                  title={`Salta ${jumpBeats} beats hacia delante`}
+                >
+                  »
+                </button>
               </div>
               <div className="flex items-center gap-1 ml-auto">
                 <span className="text-neutral-500 mr-1">Loop</span>
