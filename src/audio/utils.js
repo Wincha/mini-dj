@@ -277,6 +277,11 @@ export class BeatDetect {
         var top = groups.sort((intA, intB) => {
           return intB.count - intA.count;
         }).splice(0, 5); // Only keep the 5 best matches
+        // Guard against silent/degenerate tracks with no detectable intervals
+        if (!top.length || !top[0].tempo) {
+          reject('BeatDetect.ERROR : Unable to find intervals in track.');
+          return;
+        }
         // Build offset and first bar
         const offsets = this._getOffsets(dataL, top[0].tempo);
         options.perf.m3 = performance.now();
@@ -462,7 +467,7 @@ export class BeatDetect {
     }
     // Find first beat offset
     let i = 0; // Try finding the first peak index that is louder than provided threshold (0.02)
-    while (unsortedPeaks[i].volume < 0.02) { // Threshold is also arbitrary...
+    while (i < unsortedPeaks.length - 1 && unsortedPeaks[i].volume < 0.02) { // Threshold is also arbitrary...
       ++i;
     }
     // Convert position into time

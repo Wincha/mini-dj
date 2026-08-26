@@ -9,6 +9,12 @@ Mini two‑deck DJ experiment built with React, Vite and Tailwind. Load local au
 - Per‑deck EQ block (gain/high/mid/low) plus optional auto‑gain that normalizes loudness to a target level per track.
 - Mixer with equal‑power crossfader, deck volume faders, and VU meters for each deck and the mix bus.
 - Master output trim with gentle AGC (auto level) to prevent clipping while keeping the mix loud.
+- One‑click SYNC per deck: matches the effective BPM of the other deck by adjusting pitch (auto‑expands the pitch range if needed).
+- CUE points: positioning the track while paused sets the cue; Stop returns to it. Auto‑cue lands on the first sound / first detected beat, with an orange marker on the waveform.
+- Vinyl‑style waveform dragging: while paused, push the wave to position the track under the playhead; while playing, dragging nudges the tempo like a pitch bend.
+- Analysis feedback: the waveform area shows "Analizando pista…" and "Detectando BPM…" while a track is being processed.
+- Track list (crate): add multiple songs, load them to Deck A/B with one click, with badges showing what's loaded where.
+- Responsive layout: works down to phone widths (decks stack, mixer moves below).
 
 ## Quick start
 1) Install deps: `npm install` (Node 18+ recommended).  

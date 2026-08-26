@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AudioEngine } from "./audio/engine";
 import Deck from "./components/Deck";
 import CentralMeters from "./components/CentralMeters";
 import Mixer from "./components/Mixer";
+import TrackList from "./components/TrackList";
+
+const PITCH_RANGES = [8, 16, 50];
 
 export default function MiniDJMixer() {
   const engine = useMemo(() => new AudioEngine(), []);
@@ -13,9 +16,10 @@ export default function MiniDJMixer() {
   const [eqA, setEqA] = useState({ gain: 0, high: 0, mid: 0, low: 0 });
   const [eqB, setEqB] = useState({ gain: 0, high: 0, mid: 0, low: 0 });
 
-  // Centralizamos pitch para futuro SYNC
+  // Centralizamos pitch y BPM para SYNC
   const [pitchPctA, setPitchPctA] = useState(0);
   const [pitchPctB, setPitchPctB] = useState(0);
+  const [bpms, setBpms] = useState({ A: null, B: null });
 
   // Rango y key lock por deck
   const [rangeA, setRangeA] = useState(8);
@@ -24,6 +28,10 @@ export default function MiniDJMixer() {
   const [keyLockB, setKeyLockB] = useState(false);
 
   const [deckAutoGain, setDeckAutoGain] = useState({ A: 0, B: 0 });
+
+  // Lista de canciones (crate) y pista cargada en cada deck
+  const [tracks, setTracks] = useState([]);
+  const [deckTracks, setDeckTracks] = useState({ A: null, B: null });
 
   useEffect(() => {
     engine.setMasterAutoLevel(true);
@@ -41,12 +49,14 @@ export default function MiniDJMixer() {
     engine.setDeckVolume("B", volB);
   }, [engine, volB]);
 
-  const onAttachEl = (which, el) => engine.attachMediaElement(which, el);
+  const onAttachEl = useCallback(
+    (which, el) => engine.attachMediaElement(which, el),
+    [engine]
+  );
 
   const onVolChange = (which, v) => {
     if (which === "A") setVolA(v);
     else setVolB(v);
-    engine.setDeckVolume(which, v);
   };
 
   const setEq = (which, vals) => {
@@ -70,14 +80,76 @@ export default function MiniDJMixer() {
     else setPitchPctB(v);
   };
 
+  const onBpmDetected = useCallback((side, bpm) => {
+    setBpms((prev) => ({ ...prev, [side]: bpm }));
+  }, []);
+
+  // SYNC: iguala el BPM efectivo de este deck al del otro ajustando el pitch
+  const onSync = (side) => {
+    const other = side === "A" ? "B" : "A";
+    const ownBpm = bpms[side];
+    const otherBpm = bpms[other];
+    if (!ownBpm || !otherBpm) return;
+
+    const otherPitch = other === "A" ? pitchPctA : pitchPctB;
+    const targetBpm = otherBpm * (1 + otherPitch / 100);
+    let pitch = (targetBpm / ownBpm - 1) * 100;
+
+    // Ampliamos el rango si el pitch necesario no cabe en el actual
+    const currentRange = side === "A" ? rangeA : rangeB;
+    let range = currentRange;
+    if (Math.abs(pitch) > range) {
+      range =
+        PITCH_RANGES.find((r) => r >= Math.abs(pitch)) ??
+        PITCH_RANGES[PITCH_RANGES.length - 1];
+    }
+    pitch = Math.max(-range, Math.min(range, pitch));
+
+    setPitchRange(side, range);
+    setPitchPct(side, pitch);
+  };
+
+  const onAddTracks = (files) => {
+    setTracks((prev) => {
+      const next = [...prev];
+      for (const file of files) {
+        const exists = next.some(
+          (t) => t.name === file.name && t.size === file.size
+        );
+        if (!exists) {
+          next.push({
+            id: `${file.name}-${file.size}-${file.lastModified}`,
+            name: file.name,
+            size: file.size,
+            file,
+          });
+        }
+      }
+      return next;
+    });
+  };
+
+  const onLoadToDeck = (side, track) => {
+    setDeckTracks((prev) => ({
+      ...prev,
+      [side]: { ...track, loadToken: (prev[side]?.loadToken || 0) + 1 },
+    }));
+  };
+
+  const onRemoveTrack = (id) => {
+    setTracks((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const canSync = Boolean(bpms.A && bpms.B);
+
   return (
-    <div className="min-h-screen w-screen bg-neutral-950 text-neutral-100 p-6">
-      <div className="max-w-screen max-w-screen mx-auto grid gap-6">
+    <div className="min-h-screen w-full bg-neutral-950 text-neutral-100 p-3 sm:p-6">
+      <div className="mx-auto grid gap-4 sm:gap-6">
         {/* Panel central */}
         <CentralMeters engine={engine} master={master} setMaster={setMaster} />
 
         {/* Decks */}
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
           <Deck
             colorClass="from-cyan-500/20 to-transparent"
             engine={engine}
@@ -93,6 +165,10 @@ export default function MiniDJMixer() {
             keyLock={keyLockA}
             setKeyLock={setKeyLock}
             onAttachEl={onAttachEl}
+            onBpmDetected={onBpmDetected}
+            onSync={onSync}
+            canSync={canSync}
+            externalTrack={deckTracks.A}
             onAutoGainComputed={(side, gainDb) =>
               setDeckAutoGain((prev) => ({ ...prev, [side]: gainDb }))
             }
@@ -120,11 +196,24 @@ export default function MiniDJMixer() {
             keyLock={keyLockB}
             setKeyLock={setKeyLock}
             onAttachEl={onAttachEl}
+            onBpmDetected={onBpmDetected}
+            onSync={onSync}
+            canSync={canSync}
+            externalTrack={deckTracks.B}
             onAutoGainComputed={(side, gainDb) =>
               setDeckAutoGain((prev) => ({ ...prev, [side]: gainDb }))
             }
           />
         </div>
+
+        {/* Lista de canciones */}
+        <TrackList
+          tracks={tracks}
+          deckTracks={deckTracks}
+          onAddTracks={onAddTracks}
+          onLoadToDeck={onLoadToDeck}
+          onRemoveTrack={onRemoveTrack}
+        />
       </div>
     </div>
   );

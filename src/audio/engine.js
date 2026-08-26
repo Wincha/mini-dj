@@ -188,6 +188,15 @@ export class AudioEngine {
   // Activa/desactiva AGC
   setMasterAutoLevel(enabled, opts = {}) {
     this._enableAGC = !!enabled;
+
+    // Siempre limpiamos el timer anterior: evita timers duplicados
+    // (p.ej. StrictMode) y hace que enabled=false apague de verdad el AGC
+    if (this._agcTimer) {
+      clearInterval(this._agcTimer);
+      this._agcTimer = null;
+    }
+    if (!enabled) return;
+
     const {
       targetRMS = 0.14, // objetivo alto
       deadband = 0.01, // si estoy cerca, no toco

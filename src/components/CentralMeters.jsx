@@ -3,7 +3,7 @@ import VUBar from "./VUBar";
 
 export default function CentralMeters({ engine, master, setMaster }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 shadow-xl flex gap-6">
+    <div className="flex flex-wrap items-center justify-between rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 shadow-xl gap-4 sm:gap-6">
       <header className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
@@ -15,7 +15,7 @@ export default function CentralMeters({ engine, master, setMaster }) {
         </div>
       </header>
       {/* Master volume (horizontal) */}
-      <div className="flex flex-col gap-2 ml-6 w-full max-w-md">
+      <div className="flex flex-col gap-2 w-full max-w-md min-w-48">
         <span className="text-xs text-neutral-400">Master</span>
         <HorizontalSlider
           min={0}

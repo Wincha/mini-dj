@@ -24,8 +24,8 @@ export default function VerticalSlider({
         disabled={disabled}
         style={{
           writingMode: "vertical-rl",
-          width: `${width ? width + "px": undefined}`,
-          height: `${height ? height + "px": undefined}`,
+          ...(width ? { width: `${width}px` } : {}),
+          ...(height ? { height: `${height}px` } : {}),
           WebkitAppearance: "slider-vertical",
           transform: !inverted ? "scaleY(-1)" : "none",
         }}

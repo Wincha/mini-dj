@@ -77,7 +77,7 @@ export default function VUBar({
     <div className="relative w-3 bg-neutral-800 rounded overflow-hidden">
       {/* barra verde */}
       <div
-        className="absolute bottom-0 left-0 right-0 bg-emerald-400 transition-[height] duration-50 ease-out"
+        className="absolute bottom-0 left-0 right-0 bg-emerald-400 transition-[height] duration-75 ease-out"
         style={{ height: `${pct}%` }}
       />
       {/* línea de peak (roja) */}
@@ -97,7 +97,7 @@ export default function VUBar({
     <div className="relative h-3 bg-neutral-800 rounded overflow-hidden">
       {/* barra verde */}
       <div
-        className="absolute top-0 bottom-0 left-0 bg-emerald-400 transition-[width] duration-50 ease-out"
+        className="absolute top-0 bottom-0 left-0 bg-emerald-400 transition-[width] duration-75 ease-out"
         style={{ width: `${pct}%` }}
       />
       {/* línea de peak (roja) */}

@@ -21,8 +21,8 @@ export default function HorizontalSlider({
       disabled={disabled}
       style={{
         writingMode: "horizontal-tb",
-        width: `${width}px`,
-        height: `${height}px`,
+        ...(width ? { width: `${width}px` } : {}),
+        ...(height ? { height: `${height}px` } : {}),
         WebkitAppearance: "slider-horizontal",
         transform: inverted ? "scaleX(-1)" : "none",
       }}
@@ -31,17 +31,4 @@ export default function HorizontalSlider({
       } ${className}`}
     />
   );
-}
-
-{
-  /* <input
-          type="range"
-          min={0}
-          max={Math.max(1, Math.floor(duration))}
-          step={0.01}
-          value={Number.isFinite(current) ? current : 0}
-          onChange={(e) => seek(e.target.value)}
-          className="w-full accent-white"
-          disabled={!objectUrl}
-        /> */
 }

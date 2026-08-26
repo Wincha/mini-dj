@@ -42,10 +42,10 @@ export default function Mixer({ engine, eq, setEq, vol, onVolChange, deckAutoGai
 
   return (
     <div
-      className={`rounded-2xl border border-neutral-400 bg-neutral-900/70 p-5 shadow-xl relative overflow-hidden`}
+      className={`rounded-2xl border border-neutral-400 bg-neutral-900/70 p-4 sm:p-5 shadow-xl relative overflow-hidden order-last lg:order-none`}
     >
-      <div className="flex flex-row gap-2 justify-between m-4">
-        <div className="flex flex-row items-center justify-between gap-3 m-6 h-auto">
+      <div className="flex flex-row flex-wrap gap-4 justify-between mb-4">
+        <div className="flex flex-row items-center gap-3 sm:gap-4">
           <div className="flex flex-col gap-3">
             <Knob
               label="Gain"
@@ -98,7 +98,7 @@ export default function Mixer({ engine, eq, setEq, vol, onVolChange, deckAutoGai
               }
             />
           </div>
-          <div className="flex flex-row h-1/1 gap-6 ml-6">
+          <div className="flex flex-row self-stretch gap-3 sm:gap-6">
             <VerticalSlider
               min={0}
               max={1}
@@ -110,8 +110,8 @@ export default function Mixer({ engine, eq, setEq, vol, onVolChange, deckAutoGai
             <VUBar engine={engine} side={"A"} />
           </div>
         </div>
-        <div className="flex flex-row items-center justify-between gap-3 m-6 h-auto">
-          <div className="flex flex-row h-1/1 gap-6 mr-6">
+        <div className="flex flex-row items-center gap-3 sm:gap-4">
+          <div className="flex flex-row self-stretch gap-3 sm:gap-6">
             <VUBar engine={engine} side={"B"} />
             <VerticalSlider
               min={0}
@@ -176,7 +176,7 @@ export default function Mixer({ engine, eq, setEq, vol, onVolChange, deckAutoGai
           </div>
         </div>
       </div>
-      <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 shadow-xl w-[auto]">
+      <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 shadow-xl">
         <div className="flex items-center justify-between text-xs text-neutral-400 mb-2">
           <span>A</span>
           <span>Crossfader</span>

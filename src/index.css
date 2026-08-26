@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+/* Controles nativos (sliders, selects, file input) en modo oscuro */
+:root {
+  color-scheme: dark;
+}
