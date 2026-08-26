@@ -6,6 +6,13 @@ function formatSize(bytes) {
   return `${mb.toFixed(1)} MB`;
 }
 
+function formatDuration(s) {
+  if (!Number.isFinite(s)) return "";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
 export default function TrackList({
   tracks,
   deckTracks,
@@ -77,6 +84,24 @@ export default function TrackList({
                 <span className="shrink-0 text-xs text-neutral-500">
                   {formatSize(track.size)}
                 </span>
+                {track.duration != null && (
+                  <span className="shrink-0 text-xs text-neutral-500">
+                    {formatDuration(track.duration)}
+                  </span>
+                )}
+                {track.bpm != null ? (
+                  <span className="shrink-0 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold">
+                    {track.bpm} BPM
+                  </span>
+                ) : track.analyzeFailed ? (
+                  <span className="shrink-0 text-[10px] text-neutral-600">
+                    BPM ?
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-[10px] text-neutral-500 animate-pulse">
+                    analizando…
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button

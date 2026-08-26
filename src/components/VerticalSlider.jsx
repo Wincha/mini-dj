@@ -23,10 +23,12 @@ export default function VerticalSlider({
         onChange={onChange}
         disabled={disabled}
         style={{
-          writingMode: "vertical-rl",
+          // Equivalente moderno de "appearance: slider-vertical" (deprecado):
+          // vertical-lr + direction rtl = máximo arriba
+          writingMode: "vertical-lr",
+          direction: "rtl",
           ...(width ? { width: `${width}px` } : {}),
           ...(height ? { height: `${height}px` } : {}),
-          WebkitAppearance: "slider-vertical",
           transform: !inverted ? "scaleY(-1)" : "none",
         }}
         className={`accent-white cursor-pointer ${

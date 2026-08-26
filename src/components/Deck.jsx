@@ -1,7 +1,14 @@
-import { useEffect, useRef, useState, useMemo } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+  useImperativeHandle,
+} from "react";
 import VerticalSlider from "./VerticalSlider";
 import HorizontalSlider from "./HorizontalSlider";
 import WaveformCanvas from "./WaveformCanvas";
+import { HOT_CUE_COLORS } from "../lib/constants";
 import { analyzeTrackLoudness, BeatDetect } from "../audio/utils";
 
 export default function Deck({
@@ -12,14 +19,18 @@ export default function Deck({
   setPitchPct,
   pitchRange,
   setPitchRange,
-  // keyLock,
-  // setKeyLock,
+  keyLock,
+  setKeyLock,
   onAttachEl,
   onAutoGainComputed,
   onBpmDetected,
+  onAnalysis,
   onSync,
   canSync,
   externalTrack,
+  isActive,
+  onActivate,
+  ref,
 }) {
   const pitchRafRef = useRef(null);
   const audioRef = useRef(null);
@@ -46,6 +57,12 @@ export default function Deck({
   // o automáticamente al inicio del sonido / primer beat detectado
   const [cuePoint, setCuePoint] = useState(0);
   const cueManualRef = useRef(false);
+
+  // Hot cues (3 por deck) y loop
+  const [hotCues, setHotCues] = useState([null, null, null]);
+  const [loopIn, setLoopIn] = useState(null);
+  const [loopOut, setLoopOut] = useState(null);
+  const [loopOn, setLoopOn] = useState(false);
 
   // Fase de análisis para feedback en UI: null | "wave" | "bpm"
   const [analyzing, setAnalyzing] = useState(null);
@@ -128,6 +145,9 @@ export default function Deck({
     const max = Math.max(...peaks) || 1;
     const norm = peaks.map((v) => v / max);
     setWaveData(norm);
+    if (typeof onAnalysis === "function") {
+      onAnalysis(side, { waveData: norm, duration });
+    }
 
     // Auto-cue provisional: inicio del sonido (primer bloque no silencioso)
     const onsetIdx = norm.findIndex((v) => v > 0.05);
@@ -210,6 +230,9 @@ export default function Deck({
           beatsArr.push(t);
         }
         setBeats(beatsArr);
+        if (typeof onAnalysis === "function") {
+          onAnalysis(side, { beats: beatsArr });
+        }
         // Auto-cue definitivo: primer beat detectado
         applyAutoCue(beatStart);
       } else {
@@ -289,6 +312,14 @@ export default function Deck({
     };
   }, [onAttachEl, side]);
 
+  // Key lock: preservesPitch=true mantiene el tono al cambiar el tempo;
+  // false = modo vinilo (el pitch cambia el tono)
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.preservesPitch = !!keyLock;
+  }, [keyLock]);
+
   // limpiar URL de archivo
   useEffect(
     () => () => {
@@ -305,8 +336,15 @@ export default function Deck({
     setWaveData(null);
     setBeats([]);
     setCuePoint(0);
+    setHotCues([null, null, null]);
+    setLoopIn(null);
+    setLoopOut(null);
+    setLoopOn(false);
     cueManualRef.current = false;
     setAnalyzing("wave");
+    if (typeof onAnalysis === "function") {
+      onAnalysis(side, { waveData: null, beats: [], duration: 0 });
+    }
 
     extractWaveform(f, url).catch((err) => {
       console.error("Track analysis failed", err);
@@ -317,6 +355,7 @@ export default function Deck({
     if (!el) return;
     el.src = url;
     el.load();
+    el.preservesPitch = !!keyLock;
     setIsPlaying(false);
     setCurrent(0);
     setDuration(0);
@@ -409,6 +448,98 @@ export default function Deck({
     setBendPct(Math.max(-NUDGE_MAX, Math.min(NUDGE_MAX, pct)));
   };
 
+  // === Hot cues ===
+  const triggerHotCue = (i) => {
+    const el = audioRef.current;
+    if (!el || !objectUrl) return;
+    const t = hotCues[i];
+    if (t == null) {
+      const next = [...hotCues];
+      next[i] = el.currentTime || 0;
+      setHotCues(next);
+    } else {
+      el.currentTime = t;
+      setCurrent(t);
+    }
+  };
+
+  const clearHotCue = (i) => {
+    setHotCues((prev) => {
+      const next = [...prev];
+      next[i] = null;
+      return next;
+    });
+  };
+
+  // === Loop ===
+  const setLoopInNow = () => {
+    const el = audioRef.current;
+    if (!el || !objectUrl) return;
+    setLoopIn(el.currentTime || 0);
+    setLoopOut(null);
+    setLoopOn(false);
+  };
+
+  const setLoopOutNow = () => {
+    const el = audioRef.current;
+    if (!el || loopIn == null) return;
+    const t = el.currentTime || 0;
+    if (t <= loopIn + 0.05) return;
+    setLoopOut(t);
+    setLoopOn(true);
+  };
+
+  const toggleLoop = () => {
+    if (loopIn != null && loopOut != null) setLoopOn((v) => !v);
+  };
+
+  // Loop automático de N beats anclado al beat anterior más cercano
+  const autoLoop = (nBeats) => {
+    const el = audioRef.current;
+    if (!el || !bpm || !objectUrl) return;
+    const cur = el.currentTime || 0;
+    let start = cur;
+    for (let i = beats.length - 1; i >= 0; i--) {
+      if (beats[i] <= cur) {
+        start = beats[i];
+        break;
+      }
+    }
+    const end = start + nBeats * (60 / bpm);
+    if (duration && end > duration) return;
+    setLoopIn(start);
+    setLoopOut(end);
+    setLoopOn(true);
+  };
+
+  // Forzar el loop mientras suena
+  useEffect(() => {
+    if (!loopOn || loopIn == null || loopOut == null) return;
+    let id;
+    const tick = () => {
+      const el = audioRef.current;
+      if (el && !el.paused && el.currentTime >= loopOut) {
+        el.currentTime = loopIn;
+        setCurrent(loopIn);
+      }
+      id = requestAnimationFrame(tick);
+    };
+    id = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(id);
+  }, [loopOn, loopIn, loopOut]);
+
+  // API imperativa para atajos de teclado (MiniDJPlayer)
+  useImperativeHandle(ref, () => ({
+    playPause: () => (isPlaying ? pause() : play()),
+    cueStop: stop,
+    hotCue: triggerHotCue,
+    loopIn: setLoopInNow,
+    loopOut: setLoopOutNow,
+    loopToggle: toggleLoop,
+    nudgeStart: (sign) => startBend(sign),
+    nudgeEnd: () => releaseBend(),
+  }));
+
   // Pitch / tempo suave
   useEffect(() => {
     const el = audioRef.current;
@@ -481,13 +612,28 @@ export default function Deck({
   }
 
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 sm:p-5 shadow-xl relative overflow-hidden">
+    <div
+      onPointerDown={() => onActivate?.(side)}
+      className={`rounded-2xl border bg-neutral-900/70 p-4 sm:p-5 shadow-xl relative overflow-hidden ${
+        isActive ? "border-sky-500/60 ring-1 ring-sky-500/40" : "border-neutral-800"
+      }`}
+    >
       <div
         className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${colorClass}`}
       />
       <div className="relative grid gap-4">
         <header className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold tracking-tight shrink-0">{`Deck ${side}`}</h2>
+          <h2 className="text-lg font-semibold tracking-tight shrink-0">
+            {`Deck ${side}`}
+            {isActive && (
+              <span
+                className="ml-2 text-[9px] align-middle text-sky-400 border border-sky-500/40 rounded px-1 py-0.5"
+                title="Deck activo: recibe los atajos de teclado"
+              >
+                TECLADO
+              </span>
+            )}
+          </h2>
           <span className="text-xs text-neutral-400 truncate min-w-0">
             {getFilenameWithoutExtension()}
           </span>
@@ -558,6 +704,10 @@ export default function Deck({
                 waveData={waveData}
                 beats={beats}
                 cuePoint={cuePoint}
+                hotCues={hotCues}
+                loopIn={loopIn}
+                loopOut={loopOut}
+                loopOn={loopOn}
                 audioRef={audioRef}
                 zoom={zoom}
                 scroll={scroll}
@@ -666,16 +816,18 @@ export default function Deck({
               >
                 SYNC
               </button>
-              {/* <button
+              <button
                 onClick={() => setKeyLock(side, !keyLock)}
-                className={`px-3 py-2 rounded-2xl font-semibold border ${
+                disabled={!objectUrl}
+                className={`px-3 py-2 rounded-2xl text-xs font-semibold border disabled:opacity-40 ${
                   keyLock
                     ? "bg-sky-400 text-black border-sky-300"
                     : "bg-neutral-800 text-neutral-200 border-neutral-700"
                 }`}
+                title="Key lock: mantiene el tono al cambiar el tempo (OFF = modo vinilo)"
               >
-                Key Lock {keyLock ? "ON" : "OFF"}
-              </button> */}
+                🔒 Key
+              </button>
               <div className="ml-auto flex items-center gap-2 text-xs text-neutral-400">
                 <span>Rango</span>
                 <select
@@ -689,6 +841,98 @@ export default function Deck({
                 </select>
               </div>
             </div>
+            {/* Hot cues + Loop */}
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <div className="flex items-center gap-1">
+                {hotCues.map((t, i) => (
+                  <button
+                    key={i}
+                    onClick={() => triggerHotCue(i)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      clearHotCue(i);
+                    }}
+                    disabled={!objectUrl}
+                    className="w-7 h-7 rounded-lg border font-bold disabled:opacity-40"
+                    style={
+                      t != null
+                        ? {
+                            backgroundColor: HOT_CUE_COLORS[i],
+                            borderColor: HOT_CUE_COLORS[i],
+                            color: "#000",
+                          }
+                        : {
+                            backgroundColor: "rgb(38 38 38)",
+                            borderColor: "rgb(64 64 64)",
+                            color: "rgb(163 163 163)",
+                          }
+                    }
+                    title={
+                      t != null
+                        ? `Hot cue ${i + 1}: saltar a ${calcDuration(t)} (click dcho borra)`
+                        : `Hot cue ${i + 1}: fijar en la posición actual`
+                    }
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1 ml-auto">
+                <span className="text-neutral-500 mr-1">Loop</span>
+                <button
+                  onClick={setLoopInNow}
+                  disabled={!objectUrl}
+                  className={`px-2 py-1 rounded-lg border disabled:opacity-40 ${
+                    loopIn != null
+                      ? "bg-sky-500/30 border-sky-500/50 text-sky-300"
+                      : "bg-neutral-800 border-neutral-700 text-neutral-300"
+                  }`}
+                  title="Marca el inicio del loop en la posición actual"
+                >
+                  IN
+                </button>
+                <button
+                  onClick={setLoopOutNow}
+                  disabled={!objectUrl || loopIn == null}
+                  className={`px-2 py-1 rounded-lg border disabled:opacity-40 ${
+                    loopOut != null
+                      ? "bg-sky-500/30 border-sky-500/50 text-sky-300"
+                      : "bg-neutral-800 border-neutral-700 text-neutral-300"
+                  }`}
+                  title="Marca el final del loop y lo activa"
+                >
+                  OUT
+                </button>
+                <button
+                  onClick={() => autoLoop(4)}
+                  disabled={!objectUrl || !bpm}
+                  className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 disabled:opacity-40"
+                  title="Loop automático de 4 beats desde el beat anterior"
+                >
+                  4
+                </button>
+                <button
+                  onClick={() => autoLoop(8)}
+                  disabled={!objectUrl || !bpm}
+                  className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 disabled:opacity-40"
+                  title="Loop automático de 8 beats desde el beat anterior"
+                >
+                  8
+                </button>
+                <button
+                  onClick={toggleLoop}
+                  disabled={loopIn == null || loopOut == null}
+                  className={`px-2 py-1 rounded-lg border font-semibold disabled:opacity-40 ${
+                    loopOn
+                      ? "bg-emerald-500 border-emerald-400 text-black"
+                      : "bg-neutral-800 border-neutral-700 text-neutral-300"
+                  }`}
+                  title="Activa/desactiva el loop marcado"
+                >
+                  ⟳
+                </button>
+              </div>
+            </div>
           </div>
           <div className="flex flex-col gap-2 w-20 shrink-0 items-center">
             {/* Pitch + Bend */}
@@ -699,7 +943,7 @@ export default function Deck({
               <span className="text-[10px] text-sky-300">
                 bend {bendPct > 0 ? "+" : ""}
                 {bendPct.toFixed(2)}%
-                {/* {keyLock && " · (Key Lock)"} */}
+                {keyLock && " · 🔒"}
               </span>
               <VerticalSlider
                 min={-pitchRange}

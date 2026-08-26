@@ -1,9 +1,14 @@
 import { useEffect, useRef } from "react";
+import { HOT_CUE_COLORS } from "../lib/constants";
 
 export default function WaveformCanvas({
   waveData,
   beats,
   cuePoint,
+  hotCues,
+  loopIn,
+  loopOut,
+  loopOn,
   audioRef,
   zoom,
   scroll,
@@ -120,6 +125,46 @@ export default function WaveformCanvas({
         ctx.stroke();
       }
 
+      // Región de loop (verde translúcido)
+      if (dur > 0 && loopIn != null && loopOut != null) {
+        const inFrac = loopIn / dur;
+        const outFrac = loopOut / dur;
+        if (outFrac >= leftFrac && inFrac <= rightFrac) {
+          const x1 = Math.max(
+            0,
+            ((inFrac - leftFrac) / (rightFrac - leftFrac)) * w
+          );
+          const x2 = Math.min(
+            w,
+            ((outFrac - leftFrac) / (rightFrac - leftFrac)) * w
+          );
+          ctx.fillStyle = loopOn
+            ? "rgba(16,185,129,0.22)"
+            : "rgba(16,185,129,0.10)";
+          ctx.fillRect(x1, 0, Math.max(1, x2 - x1), h);
+          ctx.fillStyle = "rgba(16,185,129,0.9)";
+          ctx.fillRect(x1, 0, 2, h);
+          ctx.fillRect(x2 - 2, 0, 2, h);
+        }
+      }
+
+      // Hot cues (líneas de color con número)
+      if (dur > 0 && hotCues) {
+        for (let i = 0; i < hotCues.length; i++) {
+          const t = hotCues[i];
+          if (t == null) continue;
+          const frac = t / dur;
+          if (frac < leftFrac || frac > rightFrac) continue;
+          const x = ((frac - leftFrac) / (rightFrac - leftFrac)) * w;
+          ctx.fillStyle = HOT_CUE_COLORS[i] || "#fff";
+          ctx.fillRect(x - 1, 0, 2, h);
+          ctx.fillRect(x, h - 11, 10, 11);
+          ctx.fillStyle = "#000";
+          ctx.font = "bold 9px sans-serif";
+          ctx.fillText(String(i + 1), x + 3, h - 2);
+        }
+      }
+
       // Marcador de CUE (naranja)
       if (dur > 0 && Number.isFinite(cuePoint) && cuePoint > 0) {
         const cueFrac = cuePoint / dur;
@@ -153,7 +198,19 @@ export default function WaveformCanvas({
 
     frameId = requestAnimationFrame(drawFrame);
     return () => cancelAnimationFrame(frameId);
-  }, [waveData, beats, cuePoint, zoom, scroll, follow, audioRef]);
+  }, [
+    waveData,
+    beats,
+    cuePoint,
+    hotCues,
+    loopIn,
+    loopOut,
+    loopOn,
+    zoom,
+    scroll,
+    follow,
+    audioRef,
+  ]);
 
   // Ventana visible actual (mismo cálculo que drawFrame) para convertir px ↔ tiempo
   const getWindow = (audioEl) => {

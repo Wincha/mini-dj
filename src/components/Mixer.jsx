@@ -3,8 +3,19 @@ import HorizontalSlider from "./HorizontalSlider";
 import VerticalSlider from "./VerticalSlider";
 import VUBar from "./VUBar";
 import Knob from "./Knob";
+import BeatMatchPanel from "./BeatMatchPanel";
+import HeadphoneCue from "./HeadphoneCue";
 
-export default function Mixer({ engine, eq, setEq, vol, onVolChange, deckAutoGain }) {
+export default function Mixer({
+  engine,
+  eq,
+  setEq,
+  vol,
+  onVolChange,
+  deckAutoGain,
+  analysis,
+  audioElsRef,
+}) {
   const [cross, setCross] = useState(0.5);
   const [autoGainEnabled, setAutoGainEnabled] = useState({
     A: false,
@@ -189,6 +200,10 @@ export default function Mixer({ engine, eq, setEq, vol, onVolChange, deckAutoGai
           value={cross}
           onChange={(e) => setCross(Number(e.target.value))}
         />
+      </div>
+      <div className="mt-4 grid gap-4">
+        <BeatMatchPanel analysis={analysis} audioElsRef={audioElsRef} />
+        <HeadphoneCue engine={engine} />
       </div>
     </div>
   );

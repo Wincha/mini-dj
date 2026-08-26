@@ -21,6 +21,17 @@ export class AudioEngine {
     this.masterGain.connect(this.masterTrim);
     this.masterTrim.connect(this.ctx.destination);
 
+    // Stream del master para grabar la sesión (MediaRecorder)
+    this.recordDest = this.ctx.createMediaStreamDestination();
+    this.masterTrim.connect(this.recordDest);
+
+    // Bus de pre-escucha (PFL): tap post-EQ / pre-fader de cada deck
+    // -> cueGain (on/off) -> cueBus (volumen auriculares) -> stream
+    this.cueBus = this.ctx.createGain();
+    this.cueBus.gain.value = 1;
+    this.cueDest = this.ctx.createMediaStreamDestination();
+    this.cueBus.connect(this.cueDest);
+
     const mkEQ = () => {
       const eqPreGain = this.ctx.createGain(); // knob "Gain" en dB → lineal
       const low = this.ctx.createBiquadFilter(); // low-shelf 100 Hz
@@ -49,6 +60,7 @@ export class AudioEngine {
       preGain: this.ctx.createGain(), // volumen del deck (slider)
       xfGain: this.ctx.createGain(), // coeficiente del crossfader
       analyser: this.ctx.createAnalyser(),
+      cueGain: this.ctx.createGain(), // envío a auriculares (PFL)
     };
 
     this.deckB = {
@@ -58,7 +70,11 @@ export class AudioEngine {
       preGain: this.ctx.createGain(),
       xfGain: this.ctx.createGain(),
       analyser: this.ctx.createAnalyser(),
+      cueGain: this.ctx.createGain(),
     };
+
+    this.deckA.cueGain.gain.value = 0;
+    this.deckB.cueGain.gain.value = 0;
 
     // Conexiones por deck (A)
     this.deckA.eqPreGain.connect(this.deckA.low);
@@ -68,6 +84,8 @@ export class AudioEngine {
     this.deckA.preGain.connect(this.deckA.xfGain);
     this.deckA.xfGain.connect(this.deckA.analyser);
     this.deckA.analyser.connect(this.masterGain);
+    this.deckA.high.connect(this.deckA.cueGain); // PFL pre-fader
+    this.deckA.cueGain.connect(this.cueBus);
 
     // Conexiones por deck (B)
     this.deckB.eqPreGain.connect(this.deckB.low);
@@ -77,6 +95,8 @@ export class AudioEngine {
     this.deckB.preGain.connect(this.deckB.xfGain);
     this.deckB.xfGain.connect(this.deckB.analyser);
     this.deckB.analyser.connect(this.masterGain);
+    this.deckB.high.connect(this.deckB.cueGain);
+    this.deckB.cueGain.connect(this.cueBus);
 
     // Ajuste de analyser (ligero)
     [this.deckA.analyser, this.deckB.analyser].forEach((a) => {
@@ -114,6 +134,25 @@ export class AudioEngine {
 
   setMaster(vol) {
     this.masterGain.gain.value = vol;
+  }
+
+  // === PFL / pre-escucha por auriculares ===
+  setDeckCue(which, on) {
+    const deck = which === "A" ? this.deckA : this.deckB;
+    deck.cueGain.gain.value = on ? 1 : 0;
+  }
+
+  setCueVolume(vol) {
+    this.cueBus.gain.value = vol;
+  }
+
+  getCueStream() {
+    return this.cueDest.stream;
+  }
+
+  // Stream del mix master (para MediaRecorder)
+  getRecordStream() {
+    return this.recordDest.stream;
   }
 
   // Crossfader equal-power (x∈[0,1]) con volumen por deck

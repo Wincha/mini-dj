@@ -216,6 +216,8 @@ export class BeatDetect {
         // Decode track audio with audio context to later feed the offline context with a buffer
         const audioCtx = new AudioContext();
         audioCtx.decodeAudioData(options.response, buffer => {
+          // Liberamos el contexto temporal: Chrome limita el nº de AudioContexts
+          audioCtx.close().catch(() => {});
           // Define offline context according to the buffer sample rate and duration
           const offlineCtx = new window.OfflineContext(2, buffer.duration * this._sampleRate, this._sampleRate);
           // Create buffer source from loaded track

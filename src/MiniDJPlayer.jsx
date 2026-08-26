@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AudioEngine } from "./audio/engine";
+import { quickAnalyzeTrack } from "./audio/analyzeTrack";
+import {
+  loadStoredTracks,
+  storeTrack,
+  removeStoredTrack,
+} from "./lib/trackStore";
 import Deck from "./components/Deck";
 import CentralMeters from "./components/CentralMeters";
 import Mixer from "./components/Mixer";
@@ -33,6 +39,17 @@ export default function MiniDJMixer() {
   const [tracks, setTracks] = useState([]);
   const [deckTracks, setDeckTracks] = useState({ A: null, B: null });
 
+  // Onda + beats por deck (para el panel de beat-match)
+  const [deckAnalysis, setDeckAnalysis] = useState({ A: null, B: null });
+
+  // Deck activo: recibe los atajos de teclado
+  const [activeDeck, setActiveDeck] = useState("A");
+  const deckRefs = useRef({ A: null, B: null });
+  const audioElsRef = useRef({ A: null, B: null });
+
+  // Cola de análisis en segundo plano para la lista
+  const analysisBusyRef = useRef(false);
+
   useEffect(() => {
     engine.setMasterAutoLevel(true);
     return () => engine.setMasterAutoLevel(false);
@@ -49,8 +66,57 @@ export default function MiniDJMixer() {
     engine.setDeckVolume("B", volB);
   }, [engine, volB]);
 
+  // Cargar la lista guardada (IndexedDB) al arrancar
+  useEffect(() => {
+    let cancelled = false;
+    loadStoredTracks().then((stored) => {
+      if (!cancelled && stored.length) {
+        setTracks((prev) => {
+          const known = new Set(prev.map((t) => t.id));
+          return [...prev, ...stored.filter((t) => !known.has(t.id))];
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Analizar en segundo plano (una a una) las canciones sin BPM
+  useEffect(() => {
+    if (analysisBusyRef.current) return;
+    const pending = tracks.find((t) => t.bpm == null && !t.analyzeFailed);
+    if (!pending) return;
+
+    analysisBusyRef.current = true;
+    quickAnalyzeTrack(pending.file)
+      .then(({ bpm, duration }) => {
+        setTracks((prev) =>
+          prev.map((t) => (t.id === pending.id ? { ...t, bpm, duration } : t))
+        );
+        storeTrack({ ...pending, bpm, duration });
+      })
+      .catch((err) => {
+        console.error(`Analysis failed for ${pending.name}`, err);
+        // Solo en memoria: al recargar se reintenta
+        setTracks((prev) =>
+          prev.map((t) =>
+            t.id === pending.id ? { ...t, analyzeFailed: true } : t
+          )
+        );
+      })
+      .finally(() => {
+        analysisBusyRef.current = false;
+        // Dispara otra pasada para el siguiente pendiente
+        setTracks((prev) => [...prev]);
+      });
+  }, [tracks]);
+
   const onAttachEl = useCallback(
-    (which, el) => engine.attachMediaElement(which, el),
+    (which, el) => {
+      audioElsRef.current[which] = el;
+      engine.attachMediaElement(which, el);
+    },
     [engine]
   );
 
@@ -72,7 +138,7 @@ export default function MiniDJMixer() {
 
   const setKeyLock = (which, val) => {
     if (which === "A") setKeyLockA(val);
-    else setKeyLockB(val); /* TODO: activar time-stretch cuando ON */
+    else setKeyLockB(val);
   };
 
   const setPitchPct = (which, v) => {
@@ -82,6 +148,13 @@ export default function MiniDJMixer() {
 
   const onBpmDetected = useCallback((side, bpm) => {
     setBpms((prev) => ({ ...prev, [side]: bpm }));
+  }, []);
+
+  const onAnalysis = useCallback((side, data) => {
+    setDeckAnalysis((prev) => ({
+      ...prev,
+      [side]: { ...prev[side], ...data },
+    }));
   }, []);
 
   // SYNC: iguala el BPM efectivo de este deck al del otro ajustando el pitch
@@ -117,12 +190,16 @@ export default function MiniDJMixer() {
           (t) => t.name === file.name && t.size === file.size
         );
         if (!exists) {
-          next.push({
+          const track = {
             id: `${file.name}-${file.size}-${file.lastModified}`,
             name: file.name,
             size: file.size,
             file,
-          });
+            bpm: null,
+            duration: null,
+          };
+          next.push(track);
+          storeTrack(track);
         }
       }
       return next;
@@ -138,7 +215,85 @@ export default function MiniDJMixer() {
 
   const onRemoveTrack = (id) => {
     setTracks((prev) => prev.filter((t) => t.id !== id));
+    removeStoredTrack(id);
   };
+
+  // === Atajos de teclado (actúan sobre el deck activo) ===
+  useEffect(() => {
+    const isTyping = (e) => {
+      const tag = e.target?.tagName;
+      return (
+        tag === "INPUT" ||
+        tag === "SELECT" ||
+        tag === "TEXTAREA" ||
+        e.target?.isContentEditable
+      );
+    };
+
+    const onKeyDown = (e) => {
+      if (isTyping(e)) return;
+      const api = deckRefs.current[activeDeck];
+
+      switch (e.code) {
+        case "KeyQ":
+          setActiveDeck("A");
+          return;
+        case "KeyP":
+          setActiveDeck("B");
+          return;
+        default:
+          break;
+      }
+
+      if (!api) return;
+      switch (e.code) {
+        case "Space":
+          e.preventDefault();
+          if (!e.repeat) api.playPause();
+          break;
+        case "KeyC":
+          if (!e.repeat) api.cueStop();
+          break;
+        case "Digit1":
+        case "Digit2":
+        case "Digit3":
+          if (!e.repeat) api.hotCue(Number(e.code.slice(-1)) - 1);
+          break;
+        case "KeyI":
+          if (!e.repeat) api.loopIn();
+          break;
+        case "KeyO":
+          if (!e.repeat) api.loopOut();
+          break;
+        case "KeyL":
+          if (!e.repeat) api.loopToggle();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          if (!e.repeat) api.nudgeStart(-1);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          if (!e.repeat) api.nudgeStart(+1);
+          break;
+        default:
+          break;
+      }
+    };
+
+    const onKeyUp = (e) => {
+      if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+        deckRefs.current[activeDeck]?.nudgeEnd();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [activeDeck]);
 
   const canSync = Boolean(bpms.A && bpms.B);
 
@@ -151,6 +306,9 @@ export default function MiniDJMixer() {
         {/* Decks */}
         <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
           <Deck
+            ref={(api) => {
+              deckRefs.current.A = api;
+            }}
             colorClass="from-cyan-500/20 to-transparent"
             engine={engine}
             side="A"
@@ -166,9 +324,12 @@ export default function MiniDJMixer() {
             setKeyLock={setKeyLock}
             onAttachEl={onAttachEl}
             onBpmDetected={onBpmDetected}
+            onAnalysis={onAnalysis}
             onSync={onSync}
             canSync={canSync}
             externalTrack={deckTracks.A}
+            isActive={activeDeck === "A"}
+            onActivate={setActiveDeck}
             onAutoGainComputed={(side, gainDb) =>
               setDeckAutoGain((prev) => ({ ...prev, [side]: gainDb }))
             }
@@ -180,8 +341,13 @@ export default function MiniDJMixer() {
             vol={{ A: volA, B: volB }}
             onVolChange={onVolChange}
             deckAutoGain={deckAutoGain}
+            analysis={deckAnalysis}
+            audioElsRef={audioElsRef}
           />
           <Deck
+            ref={(api) => {
+              deckRefs.current.B = api;
+            }}
             colorClass="from-fuchsia-500/20 to-transparent"
             engine={engine}
             side="B"
@@ -197,9 +363,12 @@ export default function MiniDJMixer() {
             setKeyLock={setKeyLock}
             onAttachEl={onAttachEl}
             onBpmDetected={onBpmDetected}
+            onAnalysis={onAnalysis}
             onSync={onSync}
             canSync={canSync}
             externalTrack={deckTracks.B}
+            isActive={activeDeck === "B"}
+            onActivate={setActiveDeck}
             onAutoGainComputed={(side, gainDb) =>
               setDeckAutoGain((prev) => ({ ...prev, [side]: gainDb }))
             }
@@ -214,6 +383,13 @@ export default function MiniDJMixer() {
           onLoadToDeck={onLoadToDeck}
           onRemoveTrack={onRemoveTrack}
         />
+
+        {/* Atajos */}
+        <p className="text-[10px] text-neutral-600 text-center">
+          Teclado (deck activo: Q=A, P=B o click en el deck) — Espacio:
+          play/pausa · C: cue/stop · 1-3: hot cues · I/O: loop in/out · L:
+          loop on/off · ←/→: nudge
+        </p>
       </div>
     </div>
   );
