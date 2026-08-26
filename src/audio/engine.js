@@ -190,14 +190,14 @@ export class AudioEngine {
     return this.recordDest.stream;
   }
 
-  // Crossfader equal-power (x∈[0,1]) con volumen por deck
+  // Crossfader "dipless" estilo mesa DJ (x∈[0,1], 0=A, 1=B):
+  // cada deck va a tope en su mitad; del centro hacia un lado solo se
+  // atenúa el canal contrario (nunca sube el propio)
   setCrossfader(x) {
-    const a = Math.cos(x * Math.PI * 0.5);
-    const b = Math.sin(x * Math.PI * 0.5);
-    const ga = a * a;
-    const gb = b * b;
-    this.deckA.xfGain.gain.value = ga;
-    this.deckB.xfGain.gain.value = gb;
+    const tA = Math.min(1, Math.max(0, (x - 0.5) * 2)); // cuánto se aleja hacia B
+    const tB = Math.min(1, Math.max(0, (0.5 - x) * 2)); // cuánto se aleja hacia A
+    this.deckA.xfGain.gain.value = Math.cos(tA * Math.PI * 0.5);
+    this.deckB.xfGain.gain.value = Math.cos(tB * Math.PI * 0.5);
   }
 
   getRMS(which) {
