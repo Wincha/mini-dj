@@ -1,34 +1,39 @@
 # Mini DJ
 
-Mini two‑deck DJ experiment built with React, Vite and Tailwind. Load local audio files, see beat‑aware waveforms, and mix with EQ, pitch, crossfader and auto‑gain helpers—all in the browser via the Web Audio API.
+Two‑deck DJ app built with React, Vite and Tailwind — everything runs locally in the browser via the Web Audio API (no backend, tracks never leave your machine). Beat‑aware waveforms, continuous sync, cues/loops/beat‑jump, a real mixer section with filter and EQ kills, headphone pre‑listen, session recording and a persistent crate.
 
 ## Features
-- Two independent decks with file input, transport (play/pause/stop), elapsed/remaining toggle, and smooth seeking on the waveform.
-- Waveform rendering with zoom, follow mode, manual scroll, click‑to‑seek, and beat markers from automatic BPM detection; manual tap BPM on the display.
-- Pitch fader with selectable range (±8/16/50%), momentary pitch bend buttons, and live BPM readout that reflects tempo changes.
-- Per‑deck EQ block (gain/high/mid/low) plus optional auto‑gain that normalizes loudness to a target level per track. Right‑click an EQ knob for a band kill; double‑click resets it.
-- DJ filter knob per deck: one control sweeping LPF (left) ↔ HPF (right), off at center.
-- Quantize (Q, on by default): hot cues, loop in/out and beat jumps snap to the nearest beat of the grid.
-- Track list search box and sorting by name/BPM/duration; mouse wheel zooms the waveform.
-- Mixer with equal‑power crossfader, deck volume faders, and VU meters for each deck and the mix bus.
-- Master output trim with gentle AGC (auto level) to prevent clipping while keeping the mix loud.
-- Continuous SYNC per deck: while engaged the deck keeps following its tempo source — the other deck's effective BPM, or the adjustable Master Sync BPM — and the button shows which one (SYNC·A/B or SYNC·MST). Pitch range auto‑expands as needed.
-- Pitch fader behaves like a Technics turntable: up is slower, down is faster.
-- CUE points: positioning the track while paused sets the cue; Stop returns to it. Auto‑cue lands on the first sound / first detected beat, with an orange marker on the waveform.
-- Vinyl‑style waveform dragging: while paused, push the wave to position the track under the playhead; while playing, dragging nudges the tempo like a pitch bend.
-- Analysis feedback: the waveform area shows "Analizando pista…" and "Detectando BPM…" while a track is being processed.
-- Key lock per deck (`preservesPitch`): keep the musical key while changing tempo; off = vinyl mode.
+
+### Decks
+- Transport (play/pause/stop), elapsed/remaining toggle, smooth seeking, and per‑deck key lock (`preservesPitch`): keep the musical key while changing tempo; off = vinyl mode.
+- Pitch fader like a Technics turntable (up = slower, down = faster) with selectable range (±8/16/50%) and momentary pitch‑bend buttons; live BPM readout reflects tempo changes.
+- CUE points: positioning the track while paused sets the cue; Stop returns to it. Auto‑cue lands on the first sound / first detected beat (orange marker on the waveform).
 - 3 hot cues per deck (right‑click or Shift+click clears) and loops: manual IN/OUT plus auto 4/8‑beat loops snapped to the beat grid, drawn on the waveform.
-- Traktor‑style beat jump: selectable size (1–32 beats) with « / » buttons to jump backward or forward.
-- Grid TAP: tap the TAP button (or the BPM display) on the beats while the track plays — each tap re‑anchors the beat grid in real time, and several taps recompute the BPM (taps are measured in track time, so pitch doesn't skew it).
-- Keyboard shortcuts on the active deck (click a deck or Q/P to switch): Space play/pause, C cue/stop, 1‑3 hot cues, I/O loop in/out, L loop toggle, ←/→ nudge.
+- Traktor‑style beat jump: selectable size (1–32 beats) with « / » to jump backward or forward.
+- Quantize (Q, on by default): hot cues, loop in/out and beat jumps snap to the nearest grid beat.
+- Grid TAP: tap the TAP button (or the BPM display) on the beats while the track plays — each tap re‑anchors the beat grid in real time and several taps recompute the BPM. Taps are measured in track time, so pitch doesn't skew the result.
+- Waveform: zoom (buttons or mouse wheel), follow mode, manual scroll, click‑to‑seek, beat markers, cue/hot‑cue/loop overlays. Vinyl‑style dragging: while paused, push the wave to position the track under the playhead; while playing, dragging nudges the tempo like a pitch bend.
+- Analysis feedback over the waveform ("Analizando pista…", "Detectando BPM…").
+
+### Mixing
+- Mixer with **dipless crossfader** (each deck at full gain on its own half; only the opposite side attenuates), deck volume faders and VU meters per deck and mix bus.
+- Per‑deck EQ (gain/high/mid/low) with band **kills** (right‑click a knob; double‑click resets), plus optional auto‑gain that normalizes loudness per track.
+- DJ **filter** knob per deck: one control sweeping LPF (left) ↔ HPF (right), off at center.
+- Continuous **SYNC** per deck: while engaged the deck keeps following its tempo source — the other deck's effective BPM or the adjustable **Master Sync** BPM — and the button shows which (SYNC·A/B or SYNC·MST). Pitch range auto‑expands as needed.
 - Beat‑match panel: both decks' waveforms and beat markers around the playhead to line them up visually.
 - Headphone pre‑listen (PFL) per deck with its own volume.
-- Config dialog (⚙): pick the sound card/output for the master mix, the headphone cue, and optionally a dedicated output per deck (external‑mixer mode); choose whether list tracks are analyzed automatically or only when loaded to a deck.
+- Master output trim with gentle AGC (auto level) to prevent clipping while keeping the mix loud.
 - Session recording: record the master mix and download it as `.webm`.
-- The track list persists in IndexedDB, analyzes BPM/duration slowly in the background (idle time, one at a time), marks which deck each song was played on, and can be exported as CSV.
-- Track list (crate): add multiple songs, load them to Deck A/B with one click, with badges showing what's loaded where.
-- Responsive layout: works down to phone widths (decks stack, mixer moves below).
+
+### Library
+- Track list (crate): add multiple songs, load them to Deck A/B with one click, badges showing what's loaded where and (in gray) where each song was already played.
+- Persists in IndexedDB across reloads; BPM/duration analyzed slowly in the background (idle time, one at a time) or only on deck load (configurable).
+- Search box, sorting by name/BPM/duration, and CSV export.
+
+### Extras
+- Keyboard shortcuts on the active deck (click a deck or Q/P to switch): Space play/pause, C cue/stop, 1‑3 hot cues, I/O loop in/out, L loop toggle, ←/→ nudge.
+- Config dialog (⚙): pick the sound card/output for the master mix, the headphone cue, and optionally a dedicated output per deck (external‑mixer mode); choose the track‑analysis mode.
+- Responsive layout down to phone widths (decks stack, mixer moves below); Dark Reader–friendly.
 
 ## Quick start
 1) Install deps: `npm install` (Node 18+ recommended).  
@@ -42,20 +47,21 @@ Mini two‑deck DJ experiment built with React, Vite and Tailwind. Load local au
 - `npm run lint` – run ESLint.
 
 ## How to use
-- Load a track on each deck via the file picker; the waveform and auto‑gain analysis run locally (no upload).
-- Click the waveform to seek; use zoom/follow/scroll controls to navigate. Beat markers appear after BPM detection finishes.
-- Tap the BPM display to set BPM manually if auto detection misses; the live BPM reflects pitch changes.
-- Adjust pitch with the vertical fader; use ± buttons for momentary bend. Change the range from the dropdown.
-- Shape tone with Gain/High/Mid/Low knobs per deck; enable `Auto` to apply the suggested loudness trim.
-- Balance levels with deck volume faders and the equal‑power crossfader; watch VU meters. Master slider controls overall output; AGC is enabled by default.
+- Add songs to the crate (or load files directly on a deck); waveform, loudness and BPM analysis run locally.
+- Click the waveform to seek; drag it to position (paused) or nudge (playing); wheel to zoom. Beat markers appear when BPM detection finishes — if the grid is off, tap TAP on the beats to fix it live.
+- Engage SYNC to lock a deck to the other one (or enable Master Sync and dial a BPM); use the beat‑match panel to align beats visually.
+- Shape the sound with EQ knobs (right‑click = kill), the Filter knob, and balance with faders and the dipless crossfader. `Auto` applies the suggested loudness trim.
+- Pre‑listen a deck with PFL (pick the headphone output in ⚙ Config), record your set with ● REC.
 
 ## Project layout
-- `src/MiniDJPlayer.jsx` – top-level layout and shared state.
-- `src/audio/engine.js` – Web Audio graph (decks, EQ, crossfader, AGC, analysers).
-- `src/audio/utils.js` – loudness analysis and beat detection helper.
-- `src/components/*` – UI components for decks, mixer, meters, sliders, knobs, and waveform.
+- `src/MiniDJPlayer.jsx` – top-level layout, shared state, sync engine, keyboard shortcuts.
+- `src/audio/engine.js` – Web Audio graph (decks, EQ, filter, crossfader, cue bus, recording, AGC).
+- `src/audio/utils.js` – loudness analysis and BeatDetect (BPM detection, adapted from Arthur Beaulieu's library).
+- `src/audio/analyzeTrack.js` – background BPM/duration analysis for the crate.
+- `src/lib/` – IndexedDB track store, shared constants.
+- `src/components/*` – decks, mixer, meters, track list, config dialog, waveform, sliders, knobs.
 
 ## Notes / limitations
 - Browser-only; uses `AudioContext` and `createObjectURL`, so tracks stay local.
-- Auto BPM detection can be slow on very long files; tap BPM is available as a fallback.
-- PFL is only useful with a second audio output (e.g. USB headphones): pick it in the 🎧 Cue selector; the master keeps playing on the default output.
+- Auto BPM detection can miss on unusual material; the grid TAP is the fallback (and fixes the grid anchor too).
+- PFL and per‑deck outputs are only useful with more than one audio device (e.g. USB headphones): pick outputs in ⚙ Config; the master keeps playing on its own output.
