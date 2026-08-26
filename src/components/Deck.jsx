@@ -881,18 +881,6 @@ export default function Deck({
               >
                 🔒 Key
               </button>
-              <div className="ml-auto flex items-center gap-2 text-xs text-neutral-400">
-                <span>Rango</span>
-                <select
-                  value={pitchRange}
-                  onChange={onRangeChange}
-                  className="bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1"
-                >
-                  <option value={8}>±8%</option>
-                  <option value={16}>±16%</option>
-                  <option value={50}>±50%</option>
-                </select>
-              </div>
             </div>
             {/* Hot cues + Jump + Loop, alineados y separados del transporte */}
             <div className="flex items-center gap-x-4 gap-y-2 flex-wrap text-xs mt-1 pt-3 border-t border-neutral-800/70">
@@ -1078,6 +1066,17 @@ export default function Deck({
                 +
               </button>
             </div>
+            {/* Rango del pitch, junto al fader al que afecta */}
+            <select
+              value={pitchRange}
+              onChange={onRangeChange}
+              className="bg-neutral-800 border border-neutral-700 rounded-lg px-1 py-1 text-xs text-neutral-300"
+              title="Rango del fader de pitch"
+            >
+              <option value={8}>±8%</option>
+              <option value={16}>±16%</option>
+              <option value={50}>±50%</option>
+            </select>
           </div>
         </div>
         <audio
