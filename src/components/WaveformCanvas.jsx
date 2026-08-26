@@ -39,7 +39,14 @@ export default function WaveformCanvas({
 
     const ctx = canvas.getContext("2d");
 
-    const drawFrame = () => {
+    let lastDraw = 0;
+    const drawFrame = (now) => {
+      // ~30 fps y nada con la pestaña oculta: ahorra CPU
+      if (document.hidden || now - lastDraw < 33) {
+        frameId = requestAnimationFrame(drawFrame);
+        return;
+      }
+      lastDraw = now;
       const rect = canvas.getBoundingClientRect();
       const w = Math.max(1, rect.width || 600);
       const h = Math.max(1, rect.height || 80);
