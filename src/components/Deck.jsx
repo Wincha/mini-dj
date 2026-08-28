@@ -769,15 +769,15 @@ function Deck({
   return (
     <div
       onPointerDown={() => onActivate?.(side)}
-      className={`rounded-2xl border bg-neutral-900/70 p-4 sm:p-5 shadow-xl relative overflow-hidden ${
+      className={`rounded-2xl border bg-neutral-900/70 p-4 sm:p-5 shadow-xl relative overflow-hidden min-w-0 ${
         isActive ? "border-sky-500/60 ring-1 ring-sky-500/40" : "border-neutral-800"
       }`}
     >
       <div
         className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${colorClass}`}
       />
-      <div className="relative grid gap-4">
-        <header className="flex items-start justify-between gap-3">
+      <div className="relative grid gap-4 min-w-0">
+        <header className="flex items-start justify-between gap-3 min-w-0">
           <h2 className="text-lg font-semibold tracking-tight shrink-0 pt-1">
             {t("deck", { side })}
             {isActive && (
@@ -789,20 +789,23 @@ function Deck({
               </span>
             )}
           </h2>
-          {/* Cargar archivo y nombre de la pista en un solo control */}
+          {/* Cargar archivo y nombre de la pista en un solo control.
+              Ocupa el hueco que queda a la derecha del título del deck:
+              flex-1 + min-w-0 para que el nombre largo se corte con … en
+              vez de desbordar la tarjeta. */}
           <button
             onClick={() => fileInputRef.current?.click()}
             title={t("loadFile")}
-            className="flex items-center gap-2 min-w-40 max-w-[70%] px-3 py-1.5 rounded-xl border border-neutral-700 bg-neutral-800/70 hover:bg-neutral-700/70 text-left"
+            className="flex flex-1 min-w-0 items-center gap-2 px-3 py-1.5 rounded-xl border border-neutral-700 bg-neutral-800/70 hover:bg-neutral-700/70 text-left"
           >
-            <span className="text-base shrink-0">📂</span>
             <span
-              className={`truncate text-base font-semibold ${
+              className={`flex-1 min-w-0 truncate text-base font-semibold ${
                 objectUrl ? "text-neutral-100" : "text-neutral-500"
               }`}
             >
               {getFilenameWithoutExtension()}
             </span>
+            <span className="text-base shrink-0">📂</span>
           </button>
           <input
             ref={fileInputRef}

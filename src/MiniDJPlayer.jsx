@@ -498,7 +498,7 @@ export default function MiniDJMixer() {
         />
 
         {/* Decks */}
-        <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid lg:grid-cols-3 gap-4 sm:gap-6 [&>*]:min-w-0">
           <Deck
             ref={setDeckRefA}
             colorClass="from-cyan-500/20 to-transparent"
