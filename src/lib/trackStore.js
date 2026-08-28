@@ -51,9 +51,34 @@ export async function storeTrack(track) {
       bpm = null,
       duration = null,
       playedOn = {},
+      // Etiquetas ID3 y tonalidad: se guardan para no re-analizar en cada
+      // arranque. `artwork` es la MINIATURA (96 px, ~4 KB), nunca la carátula
+      // original, que puede pesar 200 KB por pista.
+      artist = null,
+      title = null,
+      album = null,
+      artwork = null,
+      metaRead = false,
+      musicalKey = null,
+      analyzed = false,
     } = track;
     await withStore("readwrite", (s) =>
-      s.put({ id, name, size, file, bpm, duration, playedOn })
+      s.put({
+        id,
+        name,
+        size,
+        file,
+        bpm,
+        duration,
+        playedOn,
+        artist,
+        title,
+        album,
+        artwork,
+        metaRead,
+        musicalKey,
+        analyzed,
+      })
     );
   } catch (err) {
     console.error("IndexedDB save failed", err);

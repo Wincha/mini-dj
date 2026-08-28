@@ -1,28 +1,28 @@
 import { BeatDetect } from "./utils";
+import { detectKey } from "./keyDetect";
 
 let detector = null;
 
-// Análisis ligero para la lista de canciones: duración + BPM.
+// Análisis ligero para la lista de canciones: duración + BPM + tonalidad.
 // Se ejecuta en segundo plano, de una en una (la cola vive en MiniDJPlayer).
+//
+// Un ÚNICO decode para las tres cosas: antes se leía la duración con un
+// <audio> y BeatDetect volvía a descargar y decodificar el archivo por su
+// cuenta. Decodificamos en un OfflineAudioContext (no necesita gesto del
+// usuario ni salida de audio) y el mismo AudioBuffer alimenta el BPM y la key.
 export async function quickAnalyzeTrack(file) {
-  const url = URL.createObjectURL(file);
-  try {
-    const duration = await new Promise((resolve, reject) => {
-      const a = new Audio();
-      a.preload = "metadata";
-      a.onloadedmetadata = () => resolve(a.duration);
-      a.onerror = () => reject(new Error(`No se pudo leer ${file.name}`));
-      a.src = url;
-    });
+  const arrayBuffer = await file.arrayBuffer();
+  const ctx = new OfflineAudioContext(1, 1, 44100);
+  const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 
-    if (!detector) detector = new BeatDetect({ round: true });
-    const info = await detector.getBeatInfo({ url, name: file.name });
+  const duration = audioBuffer.duration;
 
-    return {
-      duration: Number.isFinite(duration) ? duration : null,
-      bpm: info?.bpm ? Math.round(info.bpm) : null,
-    };
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  if (!detector) detector = new BeatDetect({ round: true, sampleRate: 44100 });
+  const info = await detector.getBeatInfoFromBuffer(audioBuffer, file.name);
+
+  return {
+    duration: Number.isFinite(duration) ? duration : null,
+    bpm: info?.bpm ? Math.round(info.bpm) : null,
+    musicalKey: detectKey(audioBuffer),
+  };
 }

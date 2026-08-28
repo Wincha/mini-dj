@@ -1,5 +1,10 @@
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n/context";
+import {
+  camelotSortIndex,
+  harmonicRelation,
+  keyLabel,
+} from "../lib/camelot";
 
 function formatSize(bytes) {
   if (!Number.isFinite(bytes)) return "";
@@ -14,39 +19,98 @@ function formatDuration(s) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
+// Nombre a mostrar: título de las etiquetas si lo hay, si no el archivo
+function displayTitle(track) {
+  return track.title || track.name;
+}
+
+// Miniatura de carátula: un solo object URL por pista, reciclado mientras la
+// pista siga en la lista. Guardar el Blob y crear la URL aquí evita tener que
+// meter URLs en el estado (que habría que revocar en cada render).
+function useArtworkUrls(tracks, enabled) {
+  const urlsRef = useRef(new Map());
+
+  useEffect(() => {
+    if (!enabled) return;
+    const alive = new Set(tracks.map((t) => t.id));
+    for (const [id, url] of urlsRef.current) {
+      if (!alive.has(id)) {
+        URL.revokeObjectURL(url);
+        urlsRef.current.delete(id);
+      }
+    }
+  }, [tracks, enabled]);
+
+  useEffect(() => {
+    const urls = urlsRef.current;
+    return () => {
+      for (const url of urls.values()) URL.revokeObjectURL(url);
+      urls.clear();
+    };
+  }, []);
+
+  return (track) => {
+    if (!track.artwork) return null;
+    let url = urlsRef.current.get(track.id);
+    if (!url) {
+      url = URL.createObjectURL(track.artwork);
+      urlsRef.current.set(track.id, url);
+    }
+    return url;
+  };
+}
+
 function TrackList({
   tracks,
   deckTracks,
   onAddTracks,
   onLoadToDeck,
   onRemoveTrack,
+  referenceKey,
+  showArtwork,
+  onToggleArtwork,
+  showKey,
 }) {
   const { t } = useI18n();
   const inputRef = useRef(null);
+  const artworkUrl = useArtworkUrls(tracks, showArtwork);
 
   // Búsqueda y ordenación
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState("added");
   const [sortDir, setSortDir] = useState(1);
+  // Con la columna de tonalidad oculta, ordenar por ella no tendría sentido
+  const activeSort = showKey || sortBy !== "key" ? sortBy : "added";
 
   const visibleTracks = useMemo(() => {
     let list = tracks;
     const q = query.trim().toLowerCase();
-    if (q) list = list.filter((tr) => tr.name.toLowerCase().includes(q));
-    if (sortBy !== "added") {
+    if (q) {
+      list = list.filter((tr) =>
+        [tr.name, tr.title, tr.artist, tr.album].some((v) =>
+          v ? v.toLowerCase().includes(q) : false
+        )
+      );
+    }
+    if (activeSort !== "added") {
       list = [...list].sort((a, b) => {
         let r = 0;
-        if (sortBy === "name") r = a.name.localeCompare(b.name);
-        else if (sortBy === "bpm") r = (a.bpm ?? 1e9) - (b.bpm ?? 1e9);
-        else if (sortBy === "duration")
+        if (activeSort === "name")
+          r = displayTitle(a).localeCompare(displayTitle(b));
+        else if (activeSort === "bpm") r = (a.bpm ?? 1e9) - (b.bpm ?? 1e9);
+        else if (activeSort === "duration")
           r = (a.duration ?? 1e9) - (b.duration ?? 1e9);
+        else if (activeSort === "key")
+          r =
+            camelotSortIndex(a.musicalKey?.pitchClass, a.musicalKey?.mode) -
+            camelotSortIndex(b.musicalKey?.pitchClass, b.musicalKey?.mode);
         return r * sortDir;
       });
     } else if (sortDir === -1) {
       list = [...list].reverse();
     }
     return list;
-  }, [tracks, query, sortBy, sortDir]);
+  }, [tracks, query, activeSort, sortDir]);
 
   const onFiles = (e) => {
     const files = Array.from(e.target.files || []);
@@ -65,17 +129,21 @@ function TrackList({
   const exportList = () => {
     const header = [
       t("csvName"),
+      t("csvArtist"),
       t("csvDuration"),
       t("csvBpm"),
+      t("csvKey"),
       t("csvSize"),
       t("csvPlayedOn"),
     ].join(";");
     const rows = tracks.map((tr) => {
       const played = ["A", "B"].filter((s) => tr.playedOn?.[s]).join("+");
       return [
-        tr.name,
+        displayTitle(tr),
+        tr.artist ?? "",
         formatDuration(tr.duration),
         tr.bpm ?? "",
+        keyLabel(tr.musicalKey?.pitchClass, tr.musicalKey?.mode) ?? "",
         formatSize(tr.size),
         played,
       ].join(";");
@@ -103,6 +171,37 @@ function TrackList({
     },
   };
 
+  // Estilo del badge de tonalidad según su relación con la pista que suena
+  const keyBadge = (track) => {
+    const own = track.musicalKey;
+    if (!own) {
+      return {
+        className: "text-neutral-600",
+        title: t("keyUnknownTitle"),
+      };
+    }
+    const relation = referenceKey ? harmonicRelation(own, referenceKey) : null;
+    if (relation === "same") {
+      return {
+        className:
+          "bg-violet-500/35 text-violet-100 ring-1 ring-violet-400/60",
+        title: t("keySameTitle"),
+      };
+    }
+    if (relation === "compatible") {
+      return {
+        className: "bg-violet-500/20 text-violet-300",
+        title: t("keyCompatibleTitle"),
+      };
+    }
+    return {
+      className: referenceKey
+        ? "bg-neutral-800/60 text-neutral-500"
+        : "bg-neutral-800 text-neutral-300",
+      title: referenceKey ? t("keyClashTitle") : t("keyTitle"),
+    };
+  };
+
   return (
     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 sm:p-5 shadow-xl">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -117,7 +216,7 @@ function TrackList({
               className="w-40 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-500"
             />
             <select
-              value={sortBy}
+              value={activeSort}
               onChange={(e) => setSortBy(e.target.value)}
               className="bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1.5 text-sm text-neutral-300"
               title={t("sortByTitle")}
@@ -125,6 +224,7 @@ function TrackList({
               <option value="added">{t("sortAdded")}</option>
               <option value="name">{t("sortName")}</option>
               <option value="bpm">{t("sortBpm")}</option>
+              {showKey && <option value="key">{t("sortKey")}</option>}
               <option value="duration">{t("sortDuration")}</option>
             </select>
             <button
@@ -134,6 +234,20 @@ function TrackList({
             >
               {sortDir === 1 ? "↑" : "↓"}
             </button>
+            {/* Mismo ajuste que en Config ⚙: quitar las miniaturas para
+                ganar sitio en pantalla */}
+            <label
+              className="flex items-center gap-1.5 text-xs text-neutral-400 cursor-pointer select-none whitespace-nowrap"
+              title={t("showArtworkTitle")}
+            >
+              <input
+                type="checkbox"
+                checked={showArtwork}
+                onChange={(e) => onToggleArtwork(e.target.checked)}
+                className="accent-emerald-500"
+              />
+              {t("showArtwork")}
+            </label>
           </div>
         )}
         <div className="flex items-center gap-2">
@@ -173,78 +287,130 @@ function TrackList({
         </p>
       ) : (
         <ul className="divide-y divide-neutral-800 max-h-64 overflow-y-auto">
-          {visibleTracks.map((track) => (
-            <li
-              key={track.id}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2"
-            >
-              {/* Badges de deck (actual en color, historial en gris) */}
-              <div className="flex items-center gap-1 w-12 shrink-0">
-                {["A", "B"].map((side) => {
-                  const state = badgeState(track, side);
-                  if (!state) return null;
-                  return (
-                    <span
-                      key={side}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${badgeClasses[side][state]}`}
-                      title={
-                        state === "current"
-                          ? t("badgeCurrentTitle", { side })
-                          : t("badgePlayedTitle", { side })
-                      }
+          {visibleTracks.map((track) => {
+            const art = showArtwork ? artworkUrl(track) : null;
+            const badge = showKey ? keyBadge(track) : null;
+            return (
+              <li
+                key={track.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2"
+              >
+                {/* Badges de deck (actual en color, historial en gris) */}
+                <div className="flex items-center gap-1 w-12 shrink-0">
+                  {["A", "B"].map((side) => {
+                    const state = badgeState(track, side);
+                    if (!state) return null;
+                    return (
+                      <span
+                        key={side}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${badgeClasses[side][state]}`}
+                        title={
+                          state === "current"
+                            ? t("badgeCurrentTitle", { side })
+                            : t("badgePlayedTitle", { side })
+                        }
+                      >
+                        {side}
+                      </span>
+                    );
+                  })}
+                </div>
+                {/* Carátula: hueco fijo de 32 px. Sin carátula se pinta un
+                    marcador discreto, así las filas nunca se descuadran. */}
+                {showArtwork &&
+                  (art ? (
+                    <img
+                      src={art}
+                      alt=""
+                      loading="lazy"
+                      className="w-8 h-8 shrink-0 rounded object-cover border border-neutral-700"
+                    />
+                  ) : (
+                    <div
+                      className="w-8 h-8 shrink-0 rounded border border-neutral-800 bg-neutral-800/50 grid place-items-center text-neutral-600 text-xs"
+                      title={t("noArtworkTitle")}
+                      aria-hidden
                     >
-                      {side}
-                    </span>
-                  );
-                })}
-              </div>
-              <span className="truncate text-sm flex-1 min-w-24">
-                {track.name}
-              </span>
-              {/* Columnas alineadas */}
-              <span className="w-16 text-right text-xs text-neutral-500 tabular-nums shrink-0 hidden sm:block">
-                {formatSize(track.size)}
-              </span>
-              <span className="w-12 text-right text-xs text-neutral-500 tabular-nums shrink-0">
-                {formatDuration(track.duration)}
-              </span>
-              <span className="w-24 shrink-0 text-center">
-                {track.bpm != null ? (
-                  <span className="inline-block w-full px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold tabular-nums truncate">
-                    {track.bpm} {t("bpm")}
+                      ♪
+                    </div>
+                  ))}
+                {/* Título + artista: dos líneas siempre, aunque no haya
+                    artista, para que todas las filas midan lo mismo */}
+                <div className="flex-1 min-w-24 grid">
+                  <span className="truncate text-sm leading-tight">
+                    {displayTitle(track)}
                   </span>
-                ) : track.analyzeFailed ? (
-                  <span className="text-[10px] text-neutral-600">{t("bpmUnknown")}</span>
-                ) : (
-                  <span className="text-[10px] text-neutral-500 animate-pulse">
-                    {t("pendingAnalysis")}
+                  <span className="truncate text-[11px] leading-tight text-neutral-500">
+                    {track.artist || " "}
+                  </span>
+                </div>
+                {/* Columnas alineadas */}
+                <span className="w-16 text-right text-xs text-neutral-500 tabular-nums shrink-0 hidden sm:block">
+                  {formatSize(track.size)}
+                </span>
+                <span className="w-12 text-right text-xs text-neutral-500 tabular-nums shrink-0">
+                  {formatDuration(track.duration)}
+                </span>
+                {showKey && (
+                  <span className="w-20 shrink-0 text-center">
+                    <span
+                      className={`inline-block w-full px-1.5 py-0.5 rounded text-[10px] font-semibold truncate ${badge.className}`}
+                      title={badge.title}
+                    >
+                      {keyLabel(
+                        track.musicalKey?.pitchClass,
+                        track.musicalKey?.mode
+                      ) || t("keyNone")}
+                    </span>
                   </span>
                 )}
-              </span>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => onLoadToDeck("A", track)}
-                  className="px-3 py-1 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/30 whitespace-nowrap"
-                >
-                  {t("loadToDeck", { side: "A" })}
-                </button>
-                <button
-                  onClick={() => onLoadToDeck("B", track)}
-                  className="px-3 py-1 rounded-lg bg-fuchsia-500/20 border border-fuchsia-500/40 text-fuchsia-300 text-xs font-semibold hover:bg-fuchsia-500/30 whitespace-nowrap"
-                >
-                  {t("loadToDeck", { side: "B" })}
-                </button>
-                <button
-                  onClick={() => onRemoveTrack(track.id)}
-                  className="px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-400 text-xs hover:text-red-400 hover:border-red-500/50"
-                  title={t("removeTitle")}
-                >
-                  ✕
-                </button>
-              </div>
-            </li>
-          ))}
+                <span className="w-24 shrink-0 text-center">
+                  {track.bpm != null ? (
+                    <span className="inline-block w-full px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold tabular-nums truncate">
+                      {track.bpm} {t("bpm")}
+                    </span>
+                  ) : track.analyzeFailed ? (
+                    <span className="text-[10px] text-neutral-600">{t("bpmUnknown")}</span>
+                  ) : (
+                    <span className="text-[10px] text-neutral-500 animate-pulse">
+                      {t("pendingAnalysis")}
+                    </span>
+                  )}
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => onLoadToDeck("A", track)}
+                    className="px-3 py-1 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/30 whitespace-nowrap"
+                  >
+                    {t("loadToDeck", { side: "A" })}
+                  </button>
+                  <button
+                    onClick={() => onLoadToDeck("B", track)}
+                    className="px-3 py-1 rounded-lg bg-fuchsia-500/20 border border-fuchsia-500/40 text-fuchsia-300 text-xs font-semibold hover:bg-fuchsia-500/30 whitespace-nowrap"
+                  >
+                    {t("loadToDeck", { side: "B" })}
+                  </button>
+                  <button
+                    onClick={() => onRemoveTrack(track.id)}
+                    className="px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-400 text-xs hover:text-red-400 hover:border-red-500/50"
+                    title={t("removeTitle")}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
+      )}
+
+      {/* Leyenda: solo aparece cuando hay una pista sonando con tonalidad */}
+      {showKey && referenceKey && (
+        <p className="mt-2 text-[10px] text-neutral-500">
+          {t("keyLegend", {
+            key: keyLabel(referenceKey.pitchClass, referenceKey.mode),
+          })}
+        </p>
       )}
     </div>
   );

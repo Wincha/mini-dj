@@ -10,7 +10,26 @@ import Fader from "./Fader";
 import WaveformCanvas from "./WaveformCanvas";
 import { HOT_CUE_COLORS } from "../lib/constants";
 import { useI18n } from "../i18n/context";
-import { analyzeTrackLoudness, BeatDetect } from "../audio/utils";
+import {
+  analyzeTrackLoudness,
+  analyzeWaveform,
+  BeatDetect,
+} from "../audio/utils";
+import { detectKey } from "../audio/keyDetect";
+import { keyLabel } from "../lib/camelot";
+import { readTrackMetadata } from "../audio/metadata";
+
+// Ejecuta algo cuando el navegador esté ocioso (con tope), devolviendo un
+// cancelador. Se usa para el análisis de tonalidad, que es síncrono y no debe
+// competir con el pintado inicial de la onda.
+function deferIdle(fn) {
+  if (typeof window.requestIdleCallback === "function") {
+    const id = window.requestIdleCallback(fn, { timeout: 4000 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = setTimeout(fn, 250);
+  return () => clearTimeout(id);
+}
 
 function Deck({
   colorClass,
@@ -31,6 +50,9 @@ function Deck({
   syncActive,
   syncLabel,
   onPlayed,
+  onPlayingChange,
+  onTrackMeta,
+  wavePalette,
   externalTrack,
   isActive,
   onActivate,
@@ -45,8 +67,23 @@ function Deck({
 
   // === Forma de onda / análisis ===
   const [waveData, setWaveData] = useState(null);
+  const [bandIndex, setBandIndex] = useState(null);
   const [beats, setBeats] = useState([]);
   const [bpm, setBpm] = useState(null);
+
+  // Etiquetas ID3 y tonalidad de la pista cargada
+  const [tags, setTags] = useState(null); // {artist, title, album}
+  const [musicalKey, setMusicalKey] = useState(null); // {pitchClass, mode, confidence}
+  const keyIdleRef = useRef(null);
+  // Datos que ya venían analizados desde la lista: evitan repetir el trabajo
+  const cachedKeyRef = useRef(null);
+  // Token de carga: descarta los resultados asíncronos de una pista anterior
+  // si mientras tanto se ha cargado otra en este deck
+  const loadIdRef = useRef(0);
+  const onTrackMetaRef = useRef(onTrackMeta);
+  onTrackMetaRef.current = onTrackMeta;
+  const onPlayingChangeRef = useRef(onPlayingChange);
+  onPlayingChangeRef.current = onPlayingChange;
 
   const [zoom, setZoom] = useState(64);
   const [scroll, setScroll] = useState(0);
@@ -110,45 +147,16 @@ function Deck({
       : `${pad(minutes)}:${pad(seconds)}`;
   };
 
-  // === Waveform + loudness (L+R → mono, resolución adaptativa) ===
-  async function extractWaveform(arrayBuffer, trackName) {
+  // === Waveform + bandas + loudness (una sola pasada por el buffer) ===
+  async function extractWaveform(arrayBuffer, trackName, loadId) {
     const audioBuffer = await engine.ctx.decodeAudioData(arrayBuffer);
 
-    const ch0 = audioBuffer.getChannelData(0);
-    const hasStereo = audioBuffer.numberOfChannels > 1;
-    const ch1 = hasStereo ? audioBuffer.getChannelData(1) : null;
-
     const duration = audioBuffer.duration;
-    const targetPerSecond = 80;
-    let samples = Math.floor(duration * targetPerSecond);
-    samples = Math.max(4000, Math.min(samples, 40000));
+    const { waveData: norm, bandIndex: bands, peak } =
+      analyzeWaveform(audioBuffer);
 
-    const len = ch0.length;
-    const blockSize = Math.max(1, Math.floor(len / samples));
-    const peaks = [];
-
-    for (let i = 0; i < samples; i++) {
-      const start = i * blockSize;
-      if (start >= len) break;
-      const end = i === samples - 1 ? len : Math.min(len, start + blockSize);
-
-      let acc = 0;
-      let count = 0;
-
-      for (let j = start; j < end; j++) {
-        const l = ch0[j];
-        const r = ch1 ? ch1[j] : l;
-        const mono = (l + r) * 0.5;
-        acc += Math.abs(mono);
-        count++;
-      }
-
-      peaks.push(count ? acc / count : 0);
-    }
-
-    const max = Math.max(...peaks) || 1;
-    const norm = peaks.map((v) => v / max);
     setWaveData(norm);
+    setBandIndex(bands);
     if (typeof onAnalysis === "function") {
       onAnalysis(side, { waveData: norm, duration });
     }
@@ -173,15 +181,6 @@ function Deck({
 
     // Techo de pico: aunque el RMS pida más, no dejamos que los picos
     // pasen de -1 dBFS (es lo que distorsionaba con el auto activado)
-    let peak = 0;
-    for (let i = 0; i < len; i++) {
-      const l = Math.abs(ch0[i]);
-      if (l > peak) peak = l;
-      if (ch1) {
-        const r = Math.abs(ch1[i]);
-        if (r > peak) peak = r;
-      }
-    }
     if (peak > 0) {
       const peakDb = 20 * Math.log10(peak);
       const headroomDb = -1 - peakDb;
@@ -198,6 +197,20 @@ function Deck({
       duration,
       trackName: trackName || "track",
     });
+
+    // Tonalidad: aprovecha el MISMO AudioBuffer, sin otro fetch ni otro
+    // decode. Bloquea el hilo principal unos cientos de ms, así que se deja
+    // para un hueco libre y solo si la pista no la traía ya analizada.
+    if (!cachedKeyRef.current) {
+      keyIdleRef.current = deferIdle(() => {
+        try {
+          const detected = detectKey(audioBuffer);
+          if (detected && loadIdRef.current === loadId) setMusicalKey(detected);
+        } catch (err) {
+          console.error("Key detection failed", err);
+        }
+      });
+    }
   }
 
   // Auto-cue: solo si el usuario no ha fijado un cue manual.
@@ -338,7 +351,10 @@ function Deck({
 
     const onTimeUpdate = () => setCurrent(el.currentTime || 0);
     const onLoadedMetadata = () => setDuration(el.duration || 0);
-    const onEnded = () => setIsPlaying(false);
+    const onEnded = () => {
+      setIsPlaying(false);
+      onPlayingChangeRef.current?.(side, false);
+    };
 
     el.addEventListener("timeupdate", onTimeUpdate);
     el.addEventListener("loadedmetadata", onLoadedMetadata);
@@ -367,10 +383,30 @@ function Deck({
     [objectUrl]
   );
 
-  const loadTrack = (f) => {
+  useEffect(() => () => keyIdleRef.current?.(), []);
+
+  // La tonalidad de la pista cargada sube al padre (venga del análisis o de
+  // la caché de la lista): la usa la lista para marcar compatibilidades
+  useEffect(() => {
+    onTrackMetaRef.current?.(side, { musicalKey });
+  }, [musicalKey, side]);
+
+  const loadTrack = (f, cached) => {
     if (!f) return;
+    keyIdleRef.current?.();
+    keyIdleRef.current = null;
+    cachedKeyRef.current = cached?.musicalKey || null;
+    const loadId = ++loadIdRef.current;
+
     setFileName(f.name);
     setWaveData(null);
+    setBandIndex(null);
+    setMusicalKey(cached?.musicalKey || null);
+    setTags(
+      cached?.artist || cached?.title
+        ? { artist: cached.artist, title: cached.title, album: cached.album }
+        : null
+    );
     setBeats([]);
     setCuePoint(0);
     setHotCues([null, null, null]);
@@ -381,6 +417,18 @@ function Deck({
     setAnalyzing("wave");
     if (typeof onAnalysis === "function") {
       onAnalysis(side, { waveData: null, beats: [], duration: 0 });
+    }
+
+    // Etiquetas ID3: no dependen del decode, así que se leen en paralelo y
+    // aparecen en cuanto están (normalmente antes que la onda)
+    if (!cached?.title && !cached?.artist) {
+      readTrackMetadata(f).then((meta) => {
+        if (loadIdRef.current !== loadId) return; // ya hay otra pista cargada
+        if (meta.artist || meta.title) {
+          setTags({ artist: meta.artist, title: meta.title, album: meta.album });
+        }
+        onTrackMetaRef.current?.(side, meta);
+      });
     }
 
     (async () => {
@@ -408,7 +456,7 @@ function Deck({
 
       // decodeAudioData "consume" (detach) el arrayBuffer, por eso la copia
       // del blob se hace antes
-      await extractWaveform(arrayBuffer, f.name);
+      await extractWaveform(arrayBuffer, f.name, loadId);
     })().catch((err) => {
       console.error("Track load failed", err);
       setAnalyzing(null);
@@ -419,9 +467,18 @@ function Deck({
   loadTrackRef.current = loadTrack;
 
   // Carga desde la lista de canciones (crate)
+  const externalTrackRef = useRef(externalTrack);
+  externalTrackRef.current = externalTrack;
   useEffect(() => {
-    if (!externalTrack?.file) return;
-    loadTrackRef.current(externalTrack.file);
+    const tr = externalTrackRef.current;
+    if (!tr?.file) return;
+    // Lo que la lista ya tenga analizado se reutiliza tal cual
+    loadTrackRef.current(tr.file, {
+      musicalKey: tr.musicalKey,
+      artist: tr.artist,
+      title: tr.title,
+      album: tr.album,
+    });
   }, [externalTrack?.loadToken, externalTrack?.file]);
 
   const onFile = (e) => {
@@ -444,6 +501,7 @@ function Deck({
     try {
       await el.play();
       setIsPlaying(true);
+      onPlayingChange?.(side, true);
       if (typeof onPlayed === "function") onPlayed(side);
     } catch (e) {
       console.error(e);
@@ -455,6 +513,7 @@ function Deck({
     if (!el) return;
     el.pause();
     setIsPlaying(false);
+    onPlayingChange?.(side, false);
   };
 
   // STOP vuelve al punto CUE (0 si no hay cue)
@@ -465,6 +524,7 @@ function Deck({
     el.currentTime = cuePoint;
     setCurrent(cuePoint);
     setIsPlaying(false);
+    onPlayingChange?.(side, false);
   };
 
   // Posicionar la pista en pausa fija el CUE en ese punto
@@ -798,12 +858,20 @@ function Deck({
             title={t("loadFile")}
             className="flex flex-1 min-w-0 items-center gap-2 px-3 py-1.5 rounded-xl border border-neutral-700 bg-neutral-800/70 hover:bg-neutral-700/70 text-left"
           >
-            <span
-              className={`flex-1 min-w-0 truncate text-base font-semibold ${
-                objectUrl ? "text-neutral-100" : "text-neutral-500"
-              }`}
-            >
-              {getFilenameWithoutExtension()}
+            {/* Título y artista de las etiquetas ID3; si no hay, el nombre
+                del archivo como siempre. La segunda línea se pinta aunque
+                esté vacía para que el alto no baile al cargar una pista. */}
+            <span className="flex-1 min-w-0 grid">
+              <span
+                className={`truncate text-base font-semibold leading-tight ${
+                  objectUrl ? "text-neutral-100" : "text-neutral-500"
+                }`}
+              >
+                {tags?.title || getFilenameWithoutExtension()}
+              </span>
+              <span className="truncate text-[10px] leading-tight text-neutral-400">
+                {tags?.artist || "\u00A0"}
+              </span>
             </span>
             <span className="text-base shrink-0">📂</span>
           </button>
@@ -856,6 +924,18 @@ function Deck({
                     ? `${bpm} BPM`
                     : t("bpmNone")}
                 </div>
+                {/* Tonalidad: se pinta siempre (guion si aún no se sabe) para
+                    reservar la línea y no mover el resto de la cabecera */}
+                <div
+                  className={`text-[10px] whitespace-nowrap ${
+                    musicalKey ? "text-violet-300" : "text-neutral-600"
+                  }`}
+                  title={t("keyTitle")}
+                >
+                  {musicalKey
+                    ? keyLabel(musicalKey.pitchClass, musicalKey.mode)
+                    : t("keyNone")}
+                </div>
               </div>
             </div>
             {/* Seek global */}
@@ -877,6 +957,8 @@ function Deck({
             <div className="relative w-full pb-7">
               <WaveformCanvas
                 waveData={waveData}
+                bandIndex={bandIndex}
+                palette={wavePalette}
                 beats={beats}
                 cuePoint={cuePoint}
                 hotCues={hotCues}

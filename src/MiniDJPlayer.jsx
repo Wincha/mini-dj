@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AudioEngine } from "./audio/engine";
 import { quickAnalyzeTrack } from "./audio/analyzeTrack";
+import { readTrackMetadata } from "./audio/metadata";
 import {
   loadStoredTracks,
   storeTrack,
@@ -13,6 +14,7 @@ import TrackList from "./components/TrackList";
 import HeadphoneCue from "./components/HeadphoneCue";
 import ConfigDialog from "./components/ConfigDialog";
 import { useI18n } from "./i18n/context";
+import { buildWavePalette, resolveWaveColors } from "./lib/waveColors";
 
 const PITCH_RANGES = [8, 16, 50];
 const CONFIG_KEY = "mini-dj-config";
@@ -56,6 +58,12 @@ export default function MiniDJMixer() {
   // Onda + beats por deck (para el panel de beat-match)
   const [deckAnalysis, setDeckAnalysis] = useState({ A: null, B: null });
 
+  // Tonalidad y estado de reproducción por deck: con esto la lista sabe con
+  // qué pista comparar las compatibilidades armónicas
+  const [deckKeys, setDeckKeys] = useState({ A: null, B: null });
+  const [playing, setPlaying] = useState({ A: false, B: false });
+  const [lastStarted, setLastStarted] = useState("A");
+
   // Deck activo: recibe los atajos de teclado
   const [activeDeck, setActiveDeck] = useState("A");
   const deckRefs = useRef({ A: null, B: null });
@@ -89,8 +97,11 @@ export default function MiniDJMixer() {
     }
   }, [config]);
 
-  // Cola de análisis en segundo plano para la lista
+  // Colas de análisis en segundo plano para la lista: las etiquetas van por
+  // su lado porque son casi instantáneas (no hay que decodificar el audio),
+  // mientras que BPM + tonalidad sí necesitan el decode completo.
   const analysisBusyRef = useRef(false);
+  const metaBusyRef = useRef(false);
 
   useEffect(() => {
     engine.setMaster(master);
@@ -154,12 +165,21 @@ export default function MiniDJMixer() {
     };
   }, []);
 
-  // Analizar en segundo plano las canciones sin BPM: muy despacio para no
-  // laguear (espera 5s + momento de inactividad del navegador, de una en una)
+  // Analizar en segundo plano las canciones a las que les falte BPM o
+  // tonalidad: muy despacio para no laguear (espera 5s + momento de
+  // inactividad del navegador, de una en una).
+  // `analyzed` evita rehacer el trabajo en bucle cuando una pista no da
+  // tonalidad (p. ej. percusión pura), y hace que las que ya estaban
+  // guardadas de antes con BPM pero sin key se analicen una vez más.
   useEffect(() => {
     if ((config.analysisMode || "auto") !== "auto") return;
     if (analysisBusyRef.current) return;
-    const pending = tracks.find((t) => t.bpm == null && !t.analyzeFailed);
+    const pending = tracks.find(
+      (t) =>
+        !t.analyzed &&
+        (t.bpm == null || t.musicalKey == null) &&
+        !t.analyzeFailed
+    );
     if (!pending) return;
 
     let cancelled = false;
@@ -167,11 +187,11 @@ export default function MiniDJMixer() {
       if (cancelled) return;
       analysisBusyRef.current = true;
       quickAnalyzeTrack(pending.file)
-        .then(({ bpm, duration }) => {
+        .then(({ bpm, duration, musicalKey }) => {
           setTracks((prev) =>
             prev.map((t) => {
               if (t.id !== pending.id) return t;
-              const updated = { ...t, bpm, duration };
+              const updated = { ...t, bpm, duration, musicalKey, analyzed: true };
               storeTrack(updated);
               return updated;
             })
@@ -203,6 +223,31 @@ export default function MiniDJMixer() {
       cancelled = true;
       clearTimeout(timerId);
     };
+  }, [tracks, config.analysisMode]);
+
+  // Etiquetas ID3 + miniatura de carátula. Igual que el BPM, respeta el modo
+  // de análisis: en "solo al cargar en un deck" no se toca nada aquí.
+  useEffect(() => {
+    if ((config.analysisMode || "auto") !== "auto") return;
+    if (metaBusyRef.current) return;
+    const pending = tracks.find((t) => !t.metaRead);
+    if (!pending) return;
+
+    metaBusyRef.current = true;
+    readTrackMetadata(pending.file)
+      .then((meta) => {
+        setTracks((prev) =>
+          prev.map((t) => {
+            if (t.id !== pending.id) return t;
+            const updated = { ...t, ...meta, metaRead: true };
+            storeTrack(updated);
+            return updated;
+          })
+        );
+      })
+      .finally(() => {
+        metaBusyRef.current = false;
+      });
   }, [tracks, config.analysisMode]);
 
   const onAttachEl = useCallback(
@@ -260,6 +305,46 @@ export default function MiniDJMixer() {
         return updated;
       })
     );
+  }, []);
+
+  // Datos que llegan del deck (etiquetas al cargar, tonalidad al analizar):
+  // se reflejan en la lista y se persisten para no repetir el trabajo
+  const onTrackMeta = useCallback((side, data) => {
+    if ("musicalKey" in data) {
+      setDeckKeys((prev) =>
+        prev[side] === data.musicalKey ? prev : { ...prev, [side]: data.musicalKey }
+      );
+    }
+    const loaded = deckTracksRef.current[side];
+    if (!loaded) return;
+
+    setTracks((prev) =>
+      prev.map((t) => {
+        if (t.id !== loaded.id) return t;
+        const updated = { ...t };
+        let changed = false;
+        if (data.musicalKey && !t.musicalKey) {
+          updated.musicalKey = data.musicalKey;
+          changed = true;
+        }
+        if ("artist" in data && !t.metaRead) {
+          updated.artist = data.artist;
+          updated.title = data.title;
+          updated.album = data.album;
+          updated.artwork = data.artwork;
+          updated.metaRead = true;
+          changed = true;
+        }
+        if (!changed) return t;
+        storeTrack(updated);
+        return updated;
+      })
+    );
+  }, []);
+
+  const onPlayingChange = useCallback((side, isPlaying) => {
+    setPlaying((prev) => (prev[side] === isPlaying ? prev : { ...prev, [side]: isPlaying }));
+    if (isPlaying) setLastStarted(side);
   }, []);
 
   const onAnalysis = useCallback((side, data) => {
@@ -372,6 +457,13 @@ export default function MiniDJMixer() {
             bpm: null,
             duration: null,
             playedOn: {},
+            analyzed: false,
+            artist: null,
+            title: null,
+            album: null,
+            artwork: null,
+            metaRead: false,
+            musicalKey: null,
           };
           next.push(track);
           storeTrack(track);
@@ -477,6 +569,22 @@ export default function MiniDJMixer() {
     return Boolean(bpms[side] && (masterSyncOn || bpms[other]));
   };
 
+  // Tonalidad de referencia para la lista: la del deck que esté sonando (si
+  // suenan los dos, la del último que arrancó)
+  const referenceKey = useMemo(() => {
+    const order = lastStarted === "B" ? ["B", "A"] : ["A", "B"];
+    for (const side of order) {
+      if (playing[side] && deckKeys[side]) return deckKeys[side];
+    }
+    return null;
+  }, [playing, deckKeys, lastStarted]);
+
+  // Paleta de la onda: se reconstruye solo al cambiar de preset o de color
+  const wavePalette = useMemo(
+    () => buildWavePalette(resolveWaveColors(config)),
+    [config]
+  );
+
   const eqPair = useMemo(() => ({ A: eqA, B: eqB }), [eqA, eqB]);
   const volPair = useMemo(() => ({ A: volA, B: volB }), [volA, volB]);
 
@@ -522,6 +630,9 @@ export default function MiniDJMixer() {
             syncActive={syncOn.A}
             syncLabel={syncLabel("A")}
             onPlayed={onPlayed}
+            onPlayingChange={onPlayingChange}
+            onTrackMeta={onTrackMeta}
+            wavePalette={wavePalette}
             externalTrack={deckTracks.A}
             isActive={activeDeck === "A"}
             onActivate={setActiveDeck}
@@ -558,6 +669,9 @@ export default function MiniDJMixer() {
             syncActive={syncOn.B}
             syncLabel={syncLabel("B")}
             onPlayed={onPlayed}
+            onPlayingChange={onPlayingChange}
+            onTrackMeta={onTrackMeta}
+            wavePalette={wavePalette}
             externalTrack={deckTracks.B}
             isActive={activeDeck === "B"}
             onActivate={setActiveDeck}
@@ -575,6 +689,12 @@ export default function MiniDJMixer() {
           onAddTracks={onAddTracks}
           onLoadToDeck={onLoadToDeck}
           onRemoveTrack={onRemoveTrack}
+          referenceKey={referenceKey}
+          showArtwork={config.showArtwork !== false}
+          showKey={config.showKey !== false}
+          onToggleArtwork={(v) =>
+            setConfig((prev) => ({ ...prev, showArtwork: v }))
+          }
         />
 
         {/* Atajos */}

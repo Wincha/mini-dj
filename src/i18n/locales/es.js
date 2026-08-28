@@ -129,6 +129,34 @@ export default {
   csvSize: "Tamaño",
   csvPlayedOn: "Pinchada en",
 
+  // Tonalidad y carátulas
+  sortKey: "Tonalidad",
+  keyTitle: "Tonalidad (notación musical / Camelot)",
+  keyNone: "Key --",
+  keyUnknownTitle: "Tonalidad sin analizar",
+  keySameTitle: "Misma tonalidad que la pista que suena",
+  keyCompatibleTitle: "Compatible con la pista que suena",
+  keyClashTitle: "No encaja con la tonalidad de la pista que suena",
+  keyLegend: "Suena en {key}: en morado, las pistas armónicamente compatibles.",
+  noArtworkTitle: "Sin carátula",
+  showArtwork: "Carátulas",
+  showArtworkTitle: "Mostrar u ocultar las miniaturas de carátula",
+  showArtworkNote: "Ocultarlas gana sitio en pantalla; las carátulas se siguen guardando.",
+  listHeading: "Lista de canciones",
+  csvArtist: "Artista",
+  csvKey: "Tonalidad",
+
+  // Colores de la onda
+  showKey: "Tonalidad de la pista",
+  wavePaletteHeading: "Colores de la onda",
+  wavePaletteNote: "Los graves, medios y agudos ya están analizados: cambiar de paleta recolorea al momento, sin volver a analizar nada.",
+  paletteMinidj: "Mini DJ (por defecto)",
+  paletteMono: "Verde clásico (un solo color)",
+  paletteCustom: "Personalizada…",
+  bandLow: "Graves",
+  bandMid: "Medios",
+  bandHigh: "Agudos",
+
   // Configuración
   configHeading: "⚙ Configuración",
   close: "Cerrar",

@@ -127,6 +127,34 @@ export default {
   csvSize: "Size",
   csvPlayedOn: "Played on",
 
+  // Tonalidad y carátulas
+  sortKey: "Key",
+  keyTitle: "Key (musical notation / Camelot)",
+  keyNone: "Key --",
+  keyUnknownTitle: "Key not analysed yet",
+  keySameTitle: "Same key as the playing track",
+  keyCompatibleTitle: "Harmonically compatible with the playing track",
+  keyClashTitle: "Does not match the playing track's key",
+  keyLegend: "Playing in {key}: harmonically compatible tracks are shown in purple.",
+  noArtworkTitle: "No artwork",
+  showArtwork: "Artwork",
+  showArtworkTitle: "Show or hide cover art thumbnails",
+  showArtworkNote: "Hiding them saves screen space; the artwork is still stored.",
+  listHeading: "Track list",
+  csvArtist: "Artist",
+  csvKey: "Key",
+
+  // Colores de la onda
+  showKey: "Track key",
+  wavePaletteHeading: "Waveform colours",
+  wavePaletteNote: "Lows, mids and highs are already analysed: switching palette recolours instantly, with no re-analysis.",
+  paletteMinidj: "Mini DJ (default)",
+  paletteMono: "Classic green (single colour)",
+  paletteCustom: "Custom…",
+  bandLow: "Lows",
+  bandMid: "Mids",
+  bandHigh: "Highs",
+
   // Settings
   configHeading: "⚙ Settings",
   close: "Close",

@@ -1,9 +1,16 @@
 import { memo, useEffect, useRef } from "react";
 import { HOT_CUE_COLORS } from "../lib/constants";
+import {
+  PALETTE_LEVELS,
+  PALETTE_SIZE,
+  WAVE_PALETTE,
+} from "../lib/waveColors";
 import { createSmoothTime } from "../lib/smoothTime";
 
 function WaveformCanvas({
   waveData,
+  bandIndex,
+  palette = WAVE_PALETTE,
   beats,
   cuePoint,
   hotCues,
@@ -22,6 +29,9 @@ function WaveformCanvas({
 }) {
   const canvasRef = useRef(null);
   const smoothTimeRef = useRef(null);
+  // Un Path2D por color de la paleta, reutilizado entre frames: agrupar los
+  // píxeles por color deja el dibujado en <=36 rellenos en vez de uno por píxel
+  const bandPathsRef = useRef(new Array(PALETTE_SIZE).fill(null));
   if (!smoothTimeRef.current) smoothTimeRef.current = createSmoothTime();
 
   // Zoom con la rueda del ratón (listener nativo: React registra wheel como
@@ -121,19 +131,81 @@ function WaveformCanvas({
       ctx.fillStyle = "#171717";
       ctx.fillRect(0, 0, w, h);
 
-      // Waveform visible: un único path en vez de un fillRect por píxel
-      ctx.fillStyle = "#22c55e";
+      // Waveform visible: un path por color (o uno solo si no hay bandas),
+      // nunca un fillRect por píxel.
+      //
+      // Cuando cada píxel abarca varias muestras (zoom bajo) se recorre el
+      // tramo entero: la altura es el máximo y el color, la media de las
+      // bandas. Muestreando solo una de cada N, el color se enganchaba al
+      // patrón del bombo y la pista entera salía naranja.
       const samplesPerPixel = visible / w;
-      const wave = new Path2D();
-      for (let x = 0; x < w; x++) {
-        const idx = Math.floor(start + x * samplesPerPixel);
-        const v = waveData[idx] || 0;
-        wave.rect(x, (1 - v) * h * 0.5, 1, v * h);
-      }
-      ctx.fill(wave);
+      const colored = bandIndex && bandIndex.length === total;
+      const paths = bandPathsRef.current;
+      if (colored) paths.fill(null);
+      const flatWave = colored ? null : new Path2D();
 
-      // Beats
-      if (beats && beats.length && dur > 0) {
+      const addBar = (x, v, ci) => {
+        if (!colored) {
+          flatWave.rect(x, (1 - v) * h * 0.5, 1, v * h);
+          return;
+        }
+        let path = paths[ci];
+        if (!path) path = paths[ci] = new Path2D();
+        path.rect(x, (1 - v) * h * 0.5, 1, v * h);
+      };
+
+      if (samplesPerPixel <= 1) {
+        for (let x = 0; x < w; x++) {
+          const idx = Math.floor(start + x * samplesPerPixel);
+          addBar(x, waveData[idx] || 0, colored ? bandIndex[idx] || 0 : 0);
+        }
+      } else {
+        for (let x = 0; x < w; x++) {
+          const from = Math.floor(start + x * samplesPerPixel);
+          const to = Math.min(total, Math.floor(start + (x + 1) * samplesPerPixel));
+          let peakV = 0;
+          let sumLow = 0;
+          let sumHigh = 0;
+          let n = 0;
+          for (let i = from; i < to; i++) {
+            const a = waveData[i];
+            if (a > peakV) peakV = a;
+            if (colored) {
+              const ci = bandIndex[i];
+              sumLow += (ci / PALETTE_LEVELS) | 0;
+              sumHigh += ci % PALETTE_LEVELS;
+            }
+            n++;
+          }
+          if (!n) continue;
+          const ci = colored
+            ? Math.round(sumLow / n) * PALETTE_LEVELS + Math.round(sumHigh / n)
+            : 0;
+          addBar(x, peakV, ci);
+        }
+      }
+
+      if (colored) {
+        for (let i = 0; i < PALETTE_SIZE; i++) {
+          const path = paths[i];
+          if (!path) continue;
+          ctx.fillStyle = palette[i];
+          ctx.fill(path);
+        }
+      } else {
+        // Sin datos de bandas: color de medios de la paleta elegida
+        ctx.fillStyle = palette[0];
+        ctx.fill(flatWave);
+      }
+
+      // Beats. A zoom bajo caben más de mil beats en el ancho del canvas y la
+      // rejilla acaba tapando la onda entera de rojo, así que por debajo de
+      // 4 px por beat no se dibuja: a esa escala no sirve para nada.
+      const beatPx =
+        beats && beats.length > 1 && dur > 0
+          ? ((beats[1] - beats[0]) / (dur * (rightFrac - leftFrac))) * w
+          : Infinity;
+      if (beats && beats.length && dur > 0 && beatPx >= 4) {
         ctx.strokeStyle = "rgba(239,68,68,0.6)";
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -224,6 +296,8 @@ function WaveformCanvas({
     return () => cancelAnimationFrame(frameId);
   }, [
     waveData,
+    bandIndex,
+    palette,
     beats,
     cuePoint,
     hotCues,
