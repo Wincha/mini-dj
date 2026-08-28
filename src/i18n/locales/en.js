@@ -80,7 +80,9 @@ export default {
   filter: "Filter",
   filterOff: "OFF",
   kill: "KILL",
-  eqTitle: "EQ: right-click = band kill · double-click = reset to zero",
+  eqTitle: "EQ band: right-click = kill the band · double-click = reset to zero",
+  gainTitle: "Channel gain · double-click = reset to zero",
+  filterTitle: "DJ filter: drag left = low-pass, right = high-pass · double-click = OFF",
   crossfader: "Crossfader",
 
   // Pre-listen

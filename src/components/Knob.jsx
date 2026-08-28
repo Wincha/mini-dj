@@ -13,6 +13,7 @@ export default function Knob({
   onContextMenu,
   resetValue, // doble click = volver a este valor
   killLabel = "KILL",
+  title,
 }) {
   const pct = (value - min) / (max - min); // 0..1
   const deg = useMemo(() => -135 + pct * 270, [pct]); // [-135°, +135°]
@@ -25,6 +26,7 @@ export default function Knob({
     <div
       className="flex flex-col items-center gap-0.5 select-none"
       style={{ width: blockWidth }}
+      title={title}
       onContextMenu={onContextMenu}
       onDoubleClick={
         resetValue !== undefined
@@ -70,7 +72,6 @@ export default function Knob({
           className={`text-xs w-full text-center truncate ${
             killed ? "text-red-400" : "text-neutral-400"
           }`}
-          title={label}
         >
           {label}
         </span>

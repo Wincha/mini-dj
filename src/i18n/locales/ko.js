@@ -77,7 +77,9 @@ export default {
   filter: "필터",
   filterOff: "OFF",
   kill: "킬",
-  eqTitle: "EQ: 오른쪽 클릭 = 대역 킬 · 더블 클릭 = 0으로",
+  eqTitle: "EQ 대역: 오른쪽 클릭 = 대역 킬 · 더블 클릭 = 0으로",
+  gainTitle: "채널 게인 · 더블 클릭 = 0으로",
+  filterTitle: "DJ 필터: 왼쪽 = 로우패스, 오른쪽 = 하이패스 · 더블 클릭 = OFF",
   crossfader: "크로스페이더",
 
   cueBus: "🎧 큐",

@@ -77,7 +77,9 @@ export default {
   filter: "Filter",
   filterOff: "OFF",
   kill: "KILL",
-  eqTitle: "EQ: eskuin-klika = banda kill · klik bikoitza = zerora",
+  eqTitle: "EQ banda: eskuin-klika = banda kill · klik bikoitza = zerora",
+  gainTitle: "Kanalaren irabazia · klik bikoitza = zerora",
+  filterTitle: "DJ iragazkia: ezkerrera = behe-iragazkia, eskuinera = goi-iragazkia · klik bikoitza = OFF",
   crossfader: "Crossfader",
 
   cueBus: "🎧 Cue",

@@ -22,6 +22,7 @@ function EqColumn({
   const band = (labelKey, key) => (
     <Knob
       size={44}
+      title={t("eqTitle")}
       label={t(labelKey)}
       min={-12}
       max={+12}
@@ -39,12 +40,10 @@ function EqColumn({
   );
 
   return (
-    <div
-      className="flex flex-col gap-2 items-center shrink-0"
-      title={t("eqTitle")}
-    >
+    <div className="flex flex-col gap-2 items-center shrink-0">
       <Knob
         size={44}
+        title={t("gainTitle")}
         label={t("gain")}
         min={-24}
         max={+12}
@@ -68,6 +67,7 @@ function EqColumn({
       {band("low", "low")}
       <Knob
         size={44}
+        title={t("filterTitle")}
         label={t("filter")}
         min={-1}
         max={1}
