@@ -160,14 +160,32 @@ export default function Deck({
       applyAutoCue(onsetTime);
     }
 
-    // Loudness con mediana
+    // Loudness con mediana + pico real de la pista
     const { db: medianDb } = analyzeTrackLoudness(audioBuffer);
-    const targetDb = -8;
+    const targetDb = -14; // objetivo de RMS (antes -8: saturaba)
     let gainDb = targetDb - medianDb;
 
     const MIN_GAIN_DB = -12;
-    const MAX_GAIN_DB = +9;
+    const MAX_GAIN_DB = +6;
     gainDb = Math.max(MIN_GAIN_DB, Math.min(MAX_GAIN_DB, gainDb));
+
+    // Techo de pico: aunque el RMS pida más, no dejamos que los picos
+    // pasen de -1 dBFS (es lo que distorsionaba con el auto activado)
+    let peak = 0;
+    for (let i = 0; i < len; i++) {
+      const l = Math.abs(ch0[i]);
+      if (l > peak) peak = l;
+      if (ch1) {
+        const r = Math.abs(ch1[i]);
+        if (r > peak) peak = r;
+      }
+    }
+    if (peak > 0) {
+      const peakDb = 20 * Math.log10(peak);
+      const headroomDb = -1 - peakDb;
+      gainDb = Math.min(gainDb, headroomDb);
+    }
+    gainDb = Math.max(MIN_GAIN_DB, gainDb);
 
     if (typeof onAutoGainComputed === "function") {
       onAutoGainComputed(side, gainDb);

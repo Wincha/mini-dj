@@ -103,9 +103,10 @@ export default function Mixer({
 }) {
   const { t } = useI18n();
   const [cross, setCross] = useState(0.5);
+  // Auto-gain activo por defecto: nivela las pistas al cargarlas
   const [autoGainEnabled, setAutoGainEnabled] = useState({
-    A: false,
-    B: false,
+    A: true,
+    B: true,
   });
   // Kills de EQ y filtro DJ por deck
   const [kills, setKills] = useState({

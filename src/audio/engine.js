@@ -17,13 +17,23 @@ export class AudioEngine {
 
     // Ruteo final (sin duplicados, sin conexiones huérfanas):
     // decks -> masterGain -> (tap a analyser) -> masterTrim -> destination
+    // Limitador de seguridad: atrapa los picos antes de la salida para que
+    // el mix nunca clipee (es lo que se oía como distorsión con auto-gain)
+    this.limiter = this.ctx.createDynamicsCompressor();
+    this.limiter.threshold.value = -3;
+    this.limiter.knee.value = 0;
+    this.limiter.ratio.value = 20;
+    this.limiter.attack.value = 0.002;
+    this.limiter.release.value = 0.15;
+
     this.masterGain.connect(this.mixAnalyser);
     this.masterGain.connect(this.masterTrim);
-    this.masterTrim.connect(this.ctx.destination);
+    this.masterTrim.connect(this.limiter);
+    this.limiter.connect(this.ctx.destination);
 
     // Stream del master para grabar la sesión (MediaRecorder)
     this.recordDest = this.ctx.createMediaStreamDestination();
-    this.masterTrim.connect(this.recordDest);
+    this.limiter.connect(this.recordDest);
 
     // Bus de pre-escucha (PFL): tap post-EQ / pre-fader de cada deck
     // -> cueGain (on/off) -> cueBus (volumen auriculares) -> stream
@@ -301,13 +311,13 @@ export class AudioEngine {
     if (!enabled) return;
 
     const {
-      targetRMS = 0.14, // objetivo alto
+      targetRMS = 0.12, // objetivo de RMS del mix
       deadband = 0.01, // si estoy cerca, no toco
-      upRate = 0.06, // SUBE rápido
-      downRate = 0.001, // BAJA muy lento
+      upRate = 0.03, // sube despacio
+      downRate = 0.02, // y baja con la misma soltura (antes: casi nunca)
       tickMs = 50,
       minGain = 0.05, // no caigas por debajo de X
-      maxGain = 2.5,
+      maxGain = 1.4, // sin refuerzos grandes: el limitador hace el resto
       silenceGate = 0.02, // no subas en silencio
     } = opts;
 
