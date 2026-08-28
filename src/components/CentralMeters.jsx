@@ -4,6 +4,7 @@ import VUBar from "./VUBar";
 import BeatMatchPanel from "./BeatMatchPanel";
 import LanguageSelector from "./LanguageSelector";
 import { useI18n } from "../i18n/context";
+import { ERRORS, logError } from "../lib/log";
 
 function formatRecTime(s) {
   const m = Math.floor(s / 60);
@@ -73,7 +74,7 @@ function CentralMeters({
 
   const toggleRecording = () => {
     if (recording) stopRecording();
-    else startRecording().catch((err) => console.error("Recording failed", err));
+    else startRecording().catch((err) => logError(ERRORS.REC_START, err));
   };
 
   return (
@@ -107,8 +108,16 @@ function CentralMeters({
           )}
         </div>
         <p className="text-sm text-neutral-400">{t("subtitle")}</p>
-        <div className="mt-1">
+        {/* Idioma a la izquierda y versión pegada al borde derecho de la
+            cabecera, centradas entre sí */}
+        <div className="mt-1 flex items-center justify-between gap-2">
           <LanguageSelector />
+          <span
+            className="text-[10px] text-neutral-500 tabular-nums whitespace-nowrap"
+            title={t("versionTitle")}
+          >
+            v{__APP_VERSION__}
+          </span>
         </div>
       </header>
 

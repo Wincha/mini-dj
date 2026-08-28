@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n/context";
 import {
+  clearLog,
+  ERRORS,
+  formatEntry,
+  formatLog,
+  logWarn,
+  readLog,
+} from "../lib/log";
+import {
   bandColorIndex,
   buildWavePalette,
   resolveWaveColors,
@@ -52,6 +60,7 @@ const TABS = [
   { id: "library", labelKey: "tabLibrary" },
   { id: "display", labelKey: "tabDisplay" },
   { id: "safety", labelKey: "tabSafety" },
+  { id: "log", labelKey: "tabLog" },
 ];
 
 // Pestaña activa entre aperturas del diálogo: dura lo que la sesión de la
@@ -67,6 +76,10 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
   const [devices, setDevices] = useState([]);
   const [labelsAllowed, setLabelsAllowed] = useState(false);
   const [tab, setTab] = useState(lastTab);
+  // El registro se relee al entrar en su pestaña: así refleja lo que haya
+  // pasado mientras el diálogo estaba abierto
+  const [entries, setEntries] = useState([]);
+  const [logFile, setLogFile] = useState("");
 
   const sinkSupported =
     typeof HTMLMediaElement !== "undefined" &&
@@ -95,6 +108,30 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
     lastTab = tab;
   }, [tab]);
 
+  useEffect(() => {
+    if (!open || tab !== "log") return;
+    setEntries(readLog());
+    window.miniDJDesktop?.logPath?.().then(setLogFile).catch(() => {});
+  }, [open, tab]);
+
+  // El registro se descarga tal cual, en orden cronológico: es un log.
+  // En la app de escritorio esto abre el diálogo nativo de guardado.
+  const downloadLog = () => {
+    const blob = new Blob([formatLog()], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mini-dj-log-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
+
+  const copyLog = () => {
+    navigator.clipboard
+      ?.writeText(formatLog())
+      .catch((err) => logWarn(ERRORS.UI_CLIPBOARD, err));
+  };
+
   // Los nombres de los dispositivos requieren permiso de audio
   const requestLabels = async () => {
     try {
@@ -102,7 +139,8 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
       stream.getTracks().forEach((t) => t.stop());
       refreshDevices();
     } catch (err) {
-      console.error("Permiso de audio denegado", err);
+      // Que el usuario diga que no es una respuesta válida, no un fallo
+      logWarn(ERRORS.CONFIG_DEVICE_PERMISSION, err);
     }
   };
 
@@ -313,6 +351,56 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
           <WavePreview colors={waveColors} />
           <p className="text-[10px] text-neutral-500">{t("wavePaletteNote")}</p>
         </div>
+      </div>
+    ),
+
+    log: (
+      <div className="grid gap-2">
+        <h3 className="text-sm font-semibold text-neutral-300">
+          {t("logHeading")}
+        </h3>
+        <p className="text-[10px] text-neutral-500">{t("logNote")}</p>
+        {logFile && (
+          <p className="text-[10px] text-neutral-500 break-all">
+            {t("logFile", { path: logFile })}
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-neutral-400 tabular-nums">
+            {t("logCount", { n: entries.length })}
+          </span>
+          <button
+            onClick={downloadLog}
+            disabled={!entries.length}
+            className="px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-300 hover:bg-neutral-700 disabled:opacity-40"
+          >
+            {t("logDownload")}
+          </button>
+          <button
+            onClick={copyLog}
+            disabled={!entries.length}
+            className="px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-300 hover:bg-neutral-700 disabled:opacity-40"
+          >
+            {t("logCopy")}
+          </button>
+          <button
+            onClick={() => {
+              clearLog();
+              setEntries([]);
+            }}
+            disabled={!entries.length}
+            className="px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-400 hover:text-red-400 hover:border-red-500/50 disabled:opacity-40"
+          >
+            {t("logClear")}
+          </button>
+        </div>
+        {/* Vista previa, lo último arriba. Alto fijo: la pestaña mide igual
+            con cero entradas que con doscientas. */}
+        <pre className="h-52 overflow-auto rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-[9px] leading-snug text-neutral-400 whitespace-pre-wrap break-all">
+          {entries.length
+            ? entries.slice().reverse().map(formatEntry).join("\n")
+            : t("logEmpty")}
+        </pre>
       </div>
     ),
 

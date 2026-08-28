@@ -19,6 +19,7 @@ import {
 import { detectKey } from "../audio/keyDetect";
 import { keyLabel } from "../lib/camelot";
 import { readTrackMetadata } from "../audio/metadata";
+import { ERRORS, logError, logWarn } from "../lib/log";
 
 // Ejecuta algo cuando el navegador esté ocioso (con tope), devolviendo un
 // cancelador. Se usa para el análisis de tonalidad, que es síncrono y no debe
@@ -190,7 +191,9 @@ function Deck({
   };
 
   // === Waveform + bandas + loudness (una sola pasada por el buffer) ===
-  async function extractWaveform(arrayBuffer, loadId) {
+  // `name` solo se usa para el registro: el estado fileName todavía tiene
+  // el de la pista anterior cuando esto corre
+  async function extractWaveform(arrayBuffer, loadId, name) {
     const audioBuffer = await engine.ctx.decodeAudioData(arrayBuffer);
 
     const duration = audioBuffer.duration;
@@ -246,7 +249,7 @@ function Deck({
           const detected = detectKey(audioBuffer);
           if (detected && loadIdRef.current === loadId) setMusicalKey(detected);
         } catch (err) {
-          console.error("Key detection failed", err);
+          logWarn(ERRORS.ANALYSIS_KEY, err, { deck: side, track: name });
         }
       });
     }
@@ -289,7 +292,7 @@ function Deck({
       // Auto-cue definitivo: primer beat detectado
       applyAutoCue(info.anchor);
     } catch (err) {
-      console.error("Beat detection failed", err);
+      logError(ERRORS.ANALYSIS_BEATS, err, { deck: side });
       if (loadIdRef.current === loadId) applyGrid(null, 0, false);
     } finally {
       if (loadIdRef.current === loadId) setAnalyzing(null);
@@ -391,7 +394,7 @@ function Deck({
       if (loadIdRef.current !== loadId) return;
       if (info?.bpm) applyGrid(round2(info.bpm), info.anchor, true);
     } catch (err) {
-      console.error("Guided regrid failed", err);
+      logError(ERRORS.ANALYSIS_REGRID, err, { deck: side, bpm });
     } finally {
       if (loadIdRef.current === loadId) setAnalyzing(null);
     }
@@ -529,9 +532,9 @@ function Deck({
 
       // decodeAudioData "consume" (detach) el arrayBuffer, por eso la copia
       // del blob se hace antes
-      await extractWaveform(arrayBuffer, loadId);
+      await extractWaveform(arrayBuffer, loadId, f.name);
     })().catch((err) => {
-      console.error("Track load failed", err);
+      logError(ERRORS.TRACK_LOAD, err, { deck: side, file: f.name });
       setAnalyzing(null);
     });
   };
@@ -580,7 +583,7 @@ function Deck({
       onPlayingChange?.(side, true);
       if (typeof onPlayed === "function") onPlayed(side);
     } catch (e) {
-      console.error(e);
+      logError(ERRORS.AUDIO_PLAY, e, { deck: side, file: fileName });
     }
   };
 
@@ -991,11 +994,22 @@ function Deck({
                     : calcDuration(current)}
                 </h5>
                 {objectUrl && (
+                  // Distancia hasta el CUE, no su posición absoluta: al
+                  // moverte por la pista lo que quieres saber es cuánto te
+                  // falta. El signo va en una caja de ancho fijo porque
+                  // tabular-nums cuadra las cifras, pero no + y −.
                   <span
                     className="text-[10px] text-orange-400 tabular-nums whitespace-nowrap"
-                    title={t("cueTitle")}
+                    title={t("cueTitle", { time: calcDuration(cuePoint) })}
                   >
-                    {t("cue")} {calcDuration(cuePoint)}
+                    {t("cue")}{" "}
+                    <span className="inline-block w-[0.62em] text-center">
+                      {/* El signo sale de la cifra YA redondeada: por debajo
+                          de un segundo estás en el cue, y un "−00:00" no
+                          significa nada */}
+                      {current < cuePoint && cuePoint - current >= 1 ? "−" : "+"}
+                    </span>
+                    {calcDuration(Math.abs(current - cuePoint))}
                   </span>
                 )}
               </div>

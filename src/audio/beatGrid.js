@@ -21,6 +21,8 @@
 // Frecuencia de muestreo a la que se rebaja el audio para el análisis. El
 // remuestreo lo hace el propio Web Audio (nativo, rápido); a 11 kHz sobra
 // para seguir golpes y el coste baja x4.
+import { ERRORS, logWarn } from "../lib/log";
+
 const RENDER_RATE = 11025;
 // Salto entre marcos de la envolvente: 64 muestras → 172,27 Hz (≈5,8 ms),
 // resolución de sobra para cuadrar una rejilla.
@@ -485,7 +487,8 @@ export function detectTempoAsync(envelope, opts = {}) {
       opts,
     });
   }).catch((err) => {
-    console.error("Tempo worker failed, falling back", err);
+    // Degrada al hilo principal: molesta, pero no rompe nada
+    logWarn(ERRORS.ANALYSIS_TEMPO_WORKER, err);
     return detectTempo(envelope, opts);
   });
 }

@@ -11,6 +11,8 @@
 //   Se carga con import() dinámico, así que no entra en el bundle inicial:
 //   solo se descarga la primera vez que se analiza una pista.
 
+import { ERRORS, logWarn } from "../lib/log";
+
 let parserPromise = null;
 
 function loadParser() {
@@ -61,7 +63,8 @@ async function makeThumbnail(picture) {
       canvas.toBlob(resolve, "image/webp", 0.8)
     );
   } catch (err) {
-    console.error("Artwork thumbnail failed", err);
+    // Sin miniatura se sigue: la pista se carga igual
+    logWarn(ERRORS.META_ARTWORK, err);
     return null;
   }
 }
@@ -90,7 +93,7 @@ export async function readTrackMetadata(file) {
       artwork: await makeThumbnail(common.picture?.[0]),
     };
   } catch (err) {
-    console.error(`Metadata read failed for ${file.name}`, err);
+    logWarn(ERRORS.META_READ, err, { file: file.name });
     return empty;
   }
 }

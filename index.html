@@ -7,7 +7,12 @@
     <!-- La app ya es oscura: Dark Reader no debe re-colorearla -->
     <meta name="darkreader-lock" />
     <meta name="color-scheme" content="dark" />
-    <title>mini-dj</title>
+    <!-- Es también el título de la ventana en escritorio: Electron adopta el
+         del documento en cuanto carga la página, así que el `title` que pone
+         BrowserWindow solo manda hasta ese momento.
+         %APP_VERSION% lo sustituye vite.config.js con la versión de
+         package.json: escrita a mano se quedaría vieja al primer npm version. -->
+    <title>Mini DJ — By Dj'Wincha · v%APP_VERSION%</title>
   </head>
   <body>
     <div id="root"></div>

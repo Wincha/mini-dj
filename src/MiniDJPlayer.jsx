@@ -16,6 +16,7 @@ import ConfigDialog from "./components/ConfigDialog";
 import UpdateToast from "./components/UpdateToast";
 import { useI18n } from "./i18n/context";
 import { buildWavePalette, resolveWaveColors } from "./lib/waveColors";
+import { ERRORS, logError } from "./lib/log";
 
 const PITCH_RANGES = [8, 16, 50];
 const CONFIG_KEY = "mini-dj-config";
@@ -133,7 +134,9 @@ export default function MiniDJMixer() {
   useEffect(() => {
     if (typeof engine.ctx.setSinkId !== "function") return;
     engine.setMasterSink(config.masterOut || "").catch((err) => {
-      console.error("Master setSinkId failed", err);
+      logError(ERRORS.AUDIO_SINK_MASTER, err, {
+        deviceId: config.masterOut || "(default)",
+      });
     });
   }, [engine, config.masterOut]);
 
@@ -145,7 +148,7 @@ export default function MiniDJMixer() {
         if (el) {
           if (!el.srcObject) el.srcObject = engine.getDeckStream(side);
           el.setSinkId?.(deviceId).catch((err) =>
-            console.error(`Deck ${side} setSinkId failed`, err)
+            logError(ERRORS.AUDIO_SINK_DECK, err, { deck: side, deviceId })
           );
           el.play().catch(() => {});
         }
@@ -216,7 +219,7 @@ export default function MiniDJMixer() {
           );
         })
         .catch((err) => {
-          console.error(`Analysis failed for ${pending.name}`, err);
+          logError(ERRORS.ANALYSIS_LIST, err, { track: pending.name });
           // Solo en memoria: al recargar se reintenta
           setTracks((prev) =>
             prev.map((t) =>

@@ -1,6 +1,8 @@
 // Persistencia de la lista de canciones en IndexedDB.
 // Los File son clonables estructuralmente, así que se guardan tal cual.
 
+import { ERRORS, logError } from "./log";
+
 const DB_NAME = "mini-dj";
 const STORE = "tracks";
 
@@ -36,7 +38,7 @@ export async function loadStoredTracks() {
     // No persistimos flags de fallo de análisis: se reintenta en cada sesión
     return rows.filter((t) => t?.id && t?.file);
   } catch (err) {
-    console.error("IndexedDB load failed", err);
+    logError(ERRORS.LIB_DB_LOAD, err);
     return [];
   }
 }
@@ -87,7 +89,7 @@ export async function storeTrack(track) {
       })
     );
   } catch (err) {
-    console.error("IndexedDB save failed", err);
+    logError(ERRORS.LIB_DB_SAVE, err, { id: track?.id });
   }
 }
 
@@ -95,6 +97,6 @@ export async function removeStoredTrack(id) {
   try {
     await withStore("readwrite", (s) => s.delete(id));
   } catch (err) {
-    console.error("IndexedDB delete failed", err);
+    logError(ERRORS.LIB_DB_DELETE, err, { id });
   }
 }

@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import Fader from "./Fader";
 import { useI18n } from "../i18n/context";
+import { ERRORS, logError } from "../lib/log";
 
 // PFL / pre-escucha: envía el deck (pre-fader, post-EQ) a la salida elegida
 // en Config (⚙). Solo tiene sentido con dos dispositivos: el master sigue
@@ -28,7 +29,7 @@ function HeadphoneCue({ engine, cueDeviceId }) {
     const el = audioRef.current;
     if (!el || !sinkSupported) return;
     el.setSinkId(cueDeviceId || "").catch((err) =>
-      console.error("setSinkId (cue) failed", err)
+      logError(ERRORS.AUDIO_SINK_CUE, err, { deviceId: cueDeviceId })
     );
   }, [cueDeviceId, sinkSupported]);
 

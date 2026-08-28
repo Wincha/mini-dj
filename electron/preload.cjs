@@ -22,4 +22,8 @@ contextBridge.exposeInMainWorld("miniDJDesktop", {
   },
   // Reiniciar e instalar lo ya descargado
   installUpdate: () => ipcRenderer.invoke(INSTALL_CHANNEL),
+  // Registro: la página manda sus líneas ya formateadas al fichero del
+  // proceso principal. Solo de ida, y solo cadenas.
+  log: (line) => ipcRenderer.send("minidj:log", String(line)),
+  logPath: () => ipcRenderer.invoke("minidj:log-path"),
 });

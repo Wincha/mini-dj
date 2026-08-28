@@ -10,6 +10,7 @@ const {
   app,
   BrowserWindow,
   Menu,
+  ipcMain,
   session,
   protocol,
   shell,
@@ -17,6 +18,13 @@ const {
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { initAutoUpdate } = require("./updater.cjs");
+const {
+  CODES,
+  logInfo,
+  logWarn,
+  writeLine,
+  logFilePath,
+} = require("./logger.cjs");
 
 const isDev = !app.isPackaged;
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || "";
@@ -142,9 +150,11 @@ function configureSession(ses) {
     item.once("done", (_e, state) => {
       // Si el usuario cancela no hay nada que hacer, pero una interrupción sí
       // conviene dejarla en el log: una grabación perdida es un fallo serio
-      const line = `[download] ${name} -> ${state}`;
-      if (state === "completed") console.log(`${line} (${item.getSavePath()})`);
-      else console.warn(line);
+      if (state === "completed") {
+        logInfo(CODES.DOWNLOAD_DONE, { file: name, to: item.getSavePath() });
+      } else {
+        logWarn(CODES.DOWNLOAD_FAILED, null, { file: name, state });
+      }
     });
   });
 
@@ -221,6 +231,14 @@ if (!app.requestSingleInstanceLock()) {
     // La ventana se pide cuando hace falta: en macOS se puede cerrar y volver
     // a abrir, y el updater dura más que ella
     initAutoUpdate(() => BrowserWindow.getAllWindows()[0] || null);
+
+    // El registro de la página va al mismo fichero que el del proceso
+    // principal: un solo sitio donde mirar cuando algo falla en un equipo
+    // ajeno. Solo se aceptan cadenas, y writeLine ya recorta y aplana.
+    ipcMain.on("minidj:log", (_event, line) => {
+      if (typeof line === "string") writeLine(line);
+    });
+    ipcMain.handle("minidj:log-path", () => logFilePath());
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

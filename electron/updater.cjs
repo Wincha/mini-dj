@@ -14,6 +14,7 @@
 
 const { app, ipcMain } = require("electron");
 const { autoUpdater } = require("electron-updater");
+const { CODES, logInfo, logWarn, logError } = require("./logger.cjs");
 
 const UPDATE_CHANNEL = "minidj:update";
 const INSTALL_CHANNEL = "minidj:update-install";
@@ -45,10 +46,12 @@ function initAutoUpdate(getWindow) {
   // El instalador se descarga solo; la instalación la decide el usuario
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  // El log propio de electron-updater entra en el mismo fichero. `debug` se
+  // deja fuera: es muy hablador y ahogaría lo que importa.
   autoUpdater.logger = {
-    info: (m) => console.log(`[update] ${m}`),
-    warn: (m) => console.warn(`[update] ${m}`),
-    error: (m) => console.error(`[update] ${m}`),
+    info: (m) => logInfo(CODES.UPDATE_STATE, { detail: m }),
+    warn: (m) => logWarn(CODES.UPDATE_STATE, null, { detail: m }),
+    error: (m) => logError(CODES.UPDATE_EVENT, null, { detail: m }),
     debug: () => {},
   };
 
@@ -60,12 +63,12 @@ function initAutoUpdate(getWindow) {
   });
 
   if (!app.isPackaged) {
-    console.log("[update] desactivado: la app no está empaquetada");
+    logInfo(CODES.UPDATE_DISABLED, { reason: "app is not packaged" });
     return;
   }
   const blocked = updaterSupported();
   if (blocked) {
-    console.log(`[update] desactivado: ${blocked}`);
+    logInfo(CODES.UPDATE_DISABLED, { reason: blocked });
     return;
   }
 
@@ -77,6 +80,7 @@ function initAutoUpdate(getWindow) {
     }
   };
 
+  autoUpdater.on("checking-for-update", () => send({ status: "checking" }));
   autoUpdater.on("update-available", (info) => {
     version = info?.version || null;
     send({ status: "downloading", percent: 0 });
@@ -88,17 +92,22 @@ function initAutoUpdate(getWindow) {
     version = info?.version || version;
     send({ status: "ready" });
   });
-  autoUpdater.on("update-not-available", () => send({ status: "idle" }));
+  autoUpdater.on("update-not-available", () => send({ status: "upToDate" }));
   autoUpdater.on("error", (err) => {
-    // Un fallo aquí no es motivo para molestar al usuario (lo más normal es
-    // estar sin red); queda en el log y la app sigue como si nada.
-    console.warn(`[update] ${err?.message || err}`);
-    send({ status: "idle" });
+    // Un fallo aquí no tumba la app, pero sí se cuenta: mandar "idle" hacía
+    // que un error de red se viera igual que estar al día, o sea, no ver nada.
+    const detail = err?.message || String(err);
+    logError(CODES.UPDATE_EVENT, err);
+    send({ status: "error", detail });
   });
 
   setTimeout(() => {
+    logInfo(CODES.UPDATE_START, {
+      current: app.getVersion(),
+      platform: process.platform,
+    });
     autoUpdater.checkForUpdates().catch((err) => {
-      console.warn(`[update] comprobación fallida: ${err?.message || err}`);
+      logError(CODES.UPDATE_CHECK, err, { current: app.getVersion() });
     });
   }, FIRST_CHECK_DELAY_MS);
 }
