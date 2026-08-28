@@ -203,4 +203,20 @@ export default {
   // Pie
   shortcuts:
     "Teclado (deck activo: Q=A, P=B o click en el deck) — Espacio: play/pausa · C: cue/stop · 1-3: hot cues · I/O: loop in/out · L: loop on/off · ←/→: nudge",
+  // Pestañas de configuración, bloqueo de carga y VU
+  tabAudio: "Audio",
+  tabLibrary: "Biblioteca",
+  tabDisplay: "Visualización",
+  tabSafety: "Seguridad",
+  safetyHeading: "Seguridad al pinchar",
+  lockLoadWhilePlaying: "No cargar pistas en un deck que está sonando",
+  lockLoadWhilePlayingNote: "Evita cargarte la mezcla en directo: mientras el deck reproduce, sus botones de carga salen deshabilitados. Desactívalo para volver al comportamiento de siempre.",
+  loadToDeckTitle: "Cargar esta pista en el deck {side}",
+  loadLockedTitle: "El deck {side} está sonando: no se puede cargar otra pista. Párala o desactiva el bloqueo en Configuración ⚙ › Seguridad.",
+  vuHeading: "Medidores de nivel (VU)",
+  vuModeContinuous: "Continuo (barra llena)",
+  vuModeLed: "LED (segmentos, como una mesa)",
+  vuNote: "Escala en dBFS de −42 a 0. Verde hasta −12, ámbar hasta −3 y rojo pegado al techo digital; el testigo retiene el pico y el bloque rojo de arriba avisa de saturación.",
+  vuChannelTitle: "Nivel del canal en dBFS (post-EQ, pre-fader: no depende del fader ni del crossfader)",
+  vuMasterTitle: "Nivel de la salida master en dBFS (medido tras el trim y el limitador)",
 };

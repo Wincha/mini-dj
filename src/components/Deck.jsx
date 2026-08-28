@@ -57,6 +57,7 @@ function Deck({
   externalTrack,
   isActive,
   onActivate,
+  lockLoadWhilePlaying,
   ref,
 }) {
   const { t } = useI18n();
@@ -445,8 +446,17 @@ function Deck({
     onTrackMetaRef.current?.(side, { musicalKey });
   }, [musicalKey, side]);
 
+  // Bloqueo de carga: con la opción puesta, un deck que está sonando no
+  // admite otra pista. Se comprueba aquí, el único punto por el que pasan
+  // TODAS las vías de carga (botón del deck y lista de canciones).
+  const lockLoadRef = useRef(lockLoadWhilePlaying);
+  lockLoadRef.current = lockLoadWhilePlaying;
+  const loadBlocked = Boolean(lockLoadWhilePlaying && isPlaying);
+
   const loadTrack = (f, cached) => {
     if (!f) return;
+    const playingNow = audioRef.current && !audioRef.current.paused;
+    if (lockLoadRef.current && playingNow) return;
     keyIdleRef.current?.();
     keyIdleRef.current = null;
     cachedKeyRef.current = cached?.musicalKey || null;
@@ -919,10 +929,20 @@ function Deck({
               Ocupa el hueco que queda a la derecha del título del deck:
               flex-1 + min-w-0 para que el nombre largo se corte con … en
               vez de desbordar la tarjeta. */}
+          {/* El title va en el envoltorio: un <button disabled> no dispara
+              eventos de ratón y el navegador no le enseña el tooltip */}
+          <span
+            className="flex flex-1 min-w-0"
+            title={loadBlocked ? t("loadLockedTitle", { side }) : t("loadFile")}
+          >
           <button
             onClick={() => fileInputRef.current?.click()}
-            title={t("loadFile")}
-            className="flex flex-1 min-w-0 items-center gap-2 px-3 py-1.5 rounded-xl border border-neutral-700 bg-neutral-800/70 hover:bg-neutral-700/70 text-left"
+            disabled={loadBlocked}
+            className={`flex w-full min-w-0 items-center gap-2 px-3 py-1.5 rounded-xl border text-left ${
+              loadBlocked
+                ? "border-neutral-800 bg-neutral-900/60 opacity-60 cursor-not-allowed"
+                : "border-neutral-700 bg-neutral-800/70 hover:bg-neutral-700/70"
+            }`}
           >
             {/* Título y artista de las etiquetas ID3; si no hay, el nombre
                 del archivo como siempre. La segunda línea se pinta aunque
@@ -939,8 +959,11 @@ function Deck({
                 {tags?.artist || "\u00A0"}
               </span>
             </span>
-            <span className="text-base shrink-0">📂</span>
+            <span className="text-base shrink-0">
+              {loadBlocked ? "🔒" : "📂"}
+            </span>
           </button>
+          </span>
           <input
             ref={fileInputRef}
             type="file"

@@ -70,6 +70,8 @@ function TrackList({
   showArtwork,
   onToggleArtwork,
   showKey,
+  playing,
+  lockLoadWhilePlaying,
 }) {
   const { t } = useI18n();
   const inputRef = useRef(null);
@@ -117,6 +119,19 @@ function TrackList({
     if (files.length) onAddTracks(files);
     // permite volver a seleccionar los mismos archivos
     e.target.value = "";
+  };
+
+  // Con el bloqueo puesto, un deck que está sonando no admite otra pista:
+  // su botón sale deshabilitado en TODAS las filas, con el motivo en el
+  // tooltip. Nada de botones que parecen pulsables y no hacen nada.
+  const deckBlocked = {
+    A: Boolean(lockLoadWhilePlaying && playing?.A),
+    B: Boolean(lockLoadWhilePlaying && playing?.B),
+  };
+
+  const loadBtnClass = {
+    A: "bg-cyan-500/20 border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30",
+    B: "bg-fuchsia-500/20 border-fuchsia-500/40 text-fuchsia-300 hover:bg-fuchsia-500/30",
   };
 
   // Badge por deck: color si está cargada ahora, gris si ya se pinchó antes
@@ -378,18 +393,36 @@ function TrackList({
                   )}
                 </span>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => onLoadToDeck("A", track)}
-                    className="px-3 py-1 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/30 whitespace-nowrap"
-                  >
-                    {t("loadToDeck", { side: "A" })}
-                  </button>
-                  <button
-                    onClick={() => onLoadToDeck("B", track)}
-                    className="px-3 py-1 rounded-lg bg-fuchsia-500/20 border border-fuchsia-500/40 text-fuchsia-300 text-xs font-semibold hover:bg-fuchsia-500/30 whitespace-nowrap"
-                  >
-                    {t("loadToDeck", { side: "B" })}
-                  </button>
+                  {["A", "B"].map((side) => {
+                    const blocked = deckBlocked[side];
+                    return (
+                      // El title va en el envoltorio: un <button disabled> no
+                      // dispara eventos de ratón y el navegador no le enseña
+                      // el tooltip
+                      <span
+                        key={side}
+                        className="inline-flex"
+                        title={
+                          blocked
+                            ? t("loadLockedTitle", { side })
+                            : t("loadToDeckTitle", { side })
+                        }
+                      >
+                        <button
+                          onClick={() => onLoadToDeck(side, track)}
+                          disabled={blocked}
+                          aria-disabled={blocked}
+                          className={`px-3 py-1 rounded-lg border text-xs font-semibold whitespace-nowrap ${
+                            blocked
+                              ? "bg-neutral-800/60 border-neutral-700 text-neutral-600 opacity-60 cursor-not-allowed"
+                              : loadBtnClass[side]
+                          }`}
+                        >
+                          {t("loadToDeck", { side })}
+                        </button>
+                      </span>
+                    );
+                  })}
                   <button
                     onClick={() => onRemoveTrack(track.id)}
                     className="px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-400 text-xs hover:text-red-400 hover:border-red-500/50"

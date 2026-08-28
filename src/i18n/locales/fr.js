@@ -194,4 +194,20 @@ export default {
 
   shortcuts:
     "Clavier (deck actif : Q=A, P=B ou clic sur le deck) — Espace : play/pause · C : cue/stop · 1-3 : hot cues · I/O : loop in/out · L : loop on/off · ←/→ : nudge",
+  // Onglets des paramètres, verrou de chargement et vumètres
+  tabAudio: "Audio",
+  tabLibrary: "Bibliothèque",
+  tabDisplay: "Affichage",
+  tabSafety: "Sécurité",
+  safetyHeading: "Sécurité en live",
+  lockLoadWhilePlaying: "Ne pas charger de morceau sur un deck en lecture",
+  lockLoadWhilePlayingNote: "Évite de casser le mix en direct : tant que le deck joue, ses boutons de chargement sont désactivés. Décochez pour retrouver le comportement d'avant.",
+  loadToDeckTitle: "Charger ce morceau sur le deck {side}",
+  loadLockedTitle: "Le deck {side} est en lecture : impossible de charger un autre morceau. Arrêtez-le ou désactivez le verrou dans Paramètres ⚙ › Sécurité.",
+  vuHeading: "Vumètres (VU)",
+  vuModeContinuous: "Continu (barre pleine)",
+  vuModeLed: "LED (segments, comme une table de mixage)",
+  vuNote: "Échelle en dBFS de −42 à 0. Vert jusqu'à −12, ambre jusqu'à −3 et rouge contre le plafond numérique ; le témoin retient la crête et le bloc rouge du haut signale la saturation.",
+  vuChannelTitle: "Niveau du canal en dBFS (après l'EQ, avant le fader : indépendant du fader et du crossfader)",
+  vuMasterTitle: "Niveau de la sortie master en dBFS (mesuré après le trim et le limiteur)",
 };

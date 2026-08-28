@@ -99,6 +99,7 @@ function Mixer({
   vol,
   onVolChange,
   deckAutoGain,
+  vuMode,
 }) {
   const { t } = useI18n();
   const [cross, setCross] = useState(0.5);
@@ -201,12 +202,12 @@ function Mixer({
               title={t("volumeTitle", { side: "A" })}
               ariaLabel={t("volumeTitle", { side: "A" })}
             />
-            <VUBar engine={engine} side={"A"} />
+            <VUBar engine={engine} side={"A"} mode={vuMode} />
           </div>
         </div>
         <div className="flex flex-row items-center gap-3 sm:gap-4">
           <div className="flex flex-row self-stretch gap-3 sm:gap-6">
-            <VUBar engine={engine} side={"B"} />
+            <VUBar engine={engine} side={"B"} mode={vuMode} />
             <Fader
               orientation="vertical"
               min={0}

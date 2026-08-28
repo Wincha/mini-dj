@@ -181,4 +181,20 @@ export default {
 
   shortcuts:
     "键盘（当前打碟机：Q=A，P=B 或点击打碟机）— 空格：播放/暂停 · C：cue/停止 · 1-3：热点 · I/O：循环起点/终点 · L：循环开关 · ←/→：微调",
+  // 设置选项卡、载入锁定与电平表
+  tabAudio: "音频",
+  tabLibrary: "曲库",
+  tabDisplay: "显示",
+  tabSafety: "安全",
+  safetyHeading: "现场安全",
+  lockLoadWhilePlaying: "正在播放的打碟机不允许载入曲目",
+  lockLoadWhilePlayingNote: "避免毁掉正在进行的混音：打碟机播放时，其载入按钮会变为不可用。关闭此项即可恢复原来的行为。",
+  loadToDeckTitle: "把这首曲目载入打碟机 {side}",
+  loadLockedTitle: "打碟机 {side} 正在播放：无法载入其他曲目。请先停止播放，或在“设置 ⚙ › 安全”中关闭此锁定。",
+  vuHeading: "电平表（VU）",
+  vuModeContinuous: "连续（实心条）",
+  vuModeLed: "LED（分段，像调音台）",
+  vuNote: "dBFS 刻度，从 −42 到 0。−12 以下为绿色，−3 以下为琥珀色，紧贴数字满刻度处为红色；标记会保持峰值，顶部的红块提示削波。",
+  vuChannelTitle: "通道电平（dBFS，EQ 之后、推子之前：不受推子和交叉推子影响）",
+  vuMasterTitle: "主输出电平（dBFS，在 trim 与限幅器之后测量）",
 };

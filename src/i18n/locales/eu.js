@@ -195,4 +195,20 @@ export default {
 
   shortcuts:
     "Teklatua (deck aktiboa: Q=A, P=B edo klika deckean) — Zuriunea: play/pausa · C: cue/stop · 1-3: hot cueak · I/O: loop in/out · L: loop on/off · ←/→: nudge",
+  // Konfigurazio-fitxak, kargatze-blokeoa eta VU
+  tabAudio: "Audioa",
+  tabLibrary: "Liburutegia",
+  tabDisplay: "Bistaratzea",
+  tabSafety: "Segurtasuna",
+  safetyHeading: "Segurtasuna zuzenean",
+  lockLoadWhilePlaying: "Ez kargatu pistarik erreproduzitzen ari den deck batean",
+  lockLoadWhilePlayingNote: "Zuzeneko nahasketa ez hondatzeko: deck-a erreproduzitzen ari den bitartean, haren kargatze-botoiak desgaituta agertzen dira. Desaktibatu betiko portaerara itzultzeko.",
+  loadToDeckTitle: "Kargatu pista hau {side} deck-ean",
+  loadLockedTitle: "{side} deck-a erreproduzitzen ari da: ezin da beste pistarik kargatu. Gelditu ezazu edo desaktibatu blokeoa Konfigurazioa ⚙ › Segurtasuna atalean.",
+  vuHeading: "Maila-neurgailuak (VU)",
+  vuModeContinuous: "Jarraitua (barra betea)",
+  vuModeLed: "LED (segmentuak, mahai batean bezala)",
+  vuNote: "dBFS eskala, −42tik 0ra. Berdea −12 arte, anbarra −3 arte eta gorria sabai digitalaren ondoan; adierazleak gailurra atxikitzen du eta goiko bloke gorriak saturazioaz ohartarazten du.",
+  vuChannelTitle: "Kanalaren maila dBFS-etan (EQ ondoren, fader aurretik: ez dago fader-aren ez crossfader-aren mende)",
+  vuMasterTitle: "Master irteeraren maila dBFS-etan (trim-aren eta mugatzailearen ondoren neurtua)",
 };

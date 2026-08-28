@@ -64,6 +64,12 @@ export default function MiniDJMixer() {
   const [deckKeys, setDeckKeys] = useState({ A: null, B: null });
   const [playing, setPlaying] = useState({ A: false, B: false });
   const [lastStarted, setLastStarted] = useState("A");
+  // Espejo en ref del estado de reproducción: lo consulta el guardián de
+  // carga sin que cambie la identidad de onLoadToDeck (TrackList es memo)
+  const playingRef = useRef(playing);
+  useEffect(() => {
+    playingRef.current = playing;
+  }, [playing]);
 
   // Deck activo: recibe los atajos de teclado
   const [activeDeck, setActiveDeck] = useState("A");
@@ -89,6 +95,14 @@ export default function MiniDJMixer() {
     }
   });
   const [showConfig, setShowConfig] = useState(false);
+
+  // Bloqueo de carga sobre un deck en reproducción (activado por defecto)
+  const lockLoadWhilePlaying = config.lockLoadWhilePlaying !== false;
+  const lockLoadRef = useRef(lockLoadWhilePlaying);
+  lockLoadRef.current = lockLoadWhilePlaying;
+
+  // Modo de visualización de los VU
+  const vuMode = config.vuMode === "led" ? "led" : "continuous";
 
   useEffect(() => {
     try {
@@ -490,12 +504,19 @@ export default function MiniDJMixer() {
     });
   }, []);
 
-  const onLoadToDeck = useCallback((side, track) => {
-    setDeckTracks((prev) => ({
-      ...prev,
-      [side]: { ...track, loadToken: (prev[side]?.loadToken || 0) + 1 },
-    }));
-  }, []);
+  // Guardián de carga: con el bloqueo puesto, un deck que está sonando no
+  // admite otra pista. Los botones ya salen deshabilitados, pero esto cierra
+  // la puerta también a atajos y a cualquier vía futura.
+  const onLoadToDeck = useCallback(
+    (side, track) => {
+      if (lockLoadRef.current && playingRef.current[side]) return;
+      setDeckTracks((prev) => ({
+        ...prev,
+        [side]: { ...track, loadToken: (prev[side]?.loadToken || 0) + 1 },
+      }));
+    },
+    []
+  );
 
   const onRemoveTrack = useCallback((id) => {
     setTracks((prev) => prev.filter((t) => t.id !== id));
@@ -620,6 +641,7 @@ export default function MiniDJMixer() {
           masterBpm={masterBpm}
           setMasterBpm={setMasterBpm}
           onOpenConfig={() => setShowConfig(true)}
+          vuMode={vuMode}
         />
 
         {/* Decks */}
@@ -654,6 +676,7 @@ export default function MiniDJMixer() {
             isActive={activeDeck === "A"}
             onActivate={setActiveDeck}
             onAutoGainComputed={onAutoGainComputed}
+            lockLoadWhilePlaying={lockLoadWhilePlaying}
           />
           <Mixer
             engine={engine}
@@ -662,6 +685,7 @@ export default function MiniDJMixer() {
             vol={volPair}
             onVolChange={onVolChange}
             deckAutoGain={deckAutoGain}
+            vuMode={vuMode}
           />
           <Deck
             ref={setDeckRefB}
@@ -693,6 +717,7 @@ export default function MiniDJMixer() {
             isActive={activeDeck === "B"}
             onActivate={setActiveDeck}
             onAutoGainComputed={onAutoGainComputed}
+            lockLoadWhilePlaying={lockLoadWhilePlaying}
           />
         </div>
 
@@ -712,6 +737,8 @@ export default function MiniDJMixer() {
           onToggleArtwork={(v) =>
             setConfig((prev) => ({ ...prev, showArtwork: v }))
           }
+          playing={playing}
+          lockLoadWhilePlaying={lockLoadWhilePlaying}
         />
 
         {/* Atajos */}

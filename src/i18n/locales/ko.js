@@ -194,4 +194,20 @@ export default {
 
   shortcuts:
     "키보드 (활성 덱: Q=A, P=B 또는 덱 클릭) — 스페이스: 재생/일시정지 · C: cue/정지 · 1-3: 핫큐 · I/O: 루프 in/out · L: 루프 on/off · ←/→: 넛지",
+  // 설정 탭, 불러오기 잠금, 레벨 미터
+  tabAudio: "오디오",
+  tabLibrary: "라이브러리",
+  tabDisplay: "표시",
+  tabSafety: "안전",
+  safetyHeading: "플레이 중 안전",
+  lockLoadWhilePlaying: "재생 중인 덱에는 트랙을 불러오지 않기",
+  lockLoadWhilePlayingNote: "라이브 믹스를 망치지 않게 해 줍니다. 덱이 재생 중이면 불러오기 버튼이 비활성화됩니다. 끄면 이전 동작으로 돌아갑니다.",
+  loadToDeckTitle: "이 트랙을 덱 {side}에 불러오기",
+  loadLockedTitle: "덱 {side}이(가) 재생 중입니다: 다른 트랙을 불러올 수 없습니다. 정지하거나 설정 ⚙ › 안전에서 잠금을 끄세요.",
+  vuHeading: "레벨 미터(VU)",
+  vuModeContinuous: "연속(채워진 막대)",
+  vuModeLed: "LED(믹서처럼 분할된 세그먼트)",
+  vuNote: "−42에서 0까지의 dBFS 눈금. −12까지 녹색, −3까지 황색, 디지털 한계에 붙은 부분은 빨간색입니다. 표시기가 피크를 유지하고, 위쪽 빨간 블록이 클리핑을 알립니다.",
+  vuChannelTitle: "채널 레벨(dBFS, EQ 뒤·페이더 앞: 페이더와 크로스페이더의 영향을 받지 않음)",
+  vuMasterTitle: "마스터 출력 레벨(dBFS, 트림과 리미터 뒤에서 측정)",
 };

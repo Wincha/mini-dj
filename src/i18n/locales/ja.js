@@ -194,4 +194,20 @@ export default {
 
   shortcuts:
     "キーボード（アクティブなデッキ：Q=A、P=B またはデッキをクリック）— スペース：再生/一時停止 · C：cue/停止 · 1-3：ホットキュー · I/O：ループ IN/OUT · L：ループ オン/オフ · ←/→：ナッジ",
+  // 設定タブ、読み込みロック、レベルメーター
+  tabAudio: "オーディオ",
+  tabLibrary: "ライブラリ",
+  tabDisplay: "表示",
+  tabSafety: "安全",
+  safetyHeading: "プレイ中の安全",
+  lockLoadWhilePlaying: "再生中のデッキには曲を読み込まない",
+  lockLoadWhilePlayingNote: "本番のミックスを壊さないための設定です。デッキが再生している間は読み込みボタンが無効になります。オフにすると以前の動作に戻ります。",
+  loadToDeckTitle: "この曲をデッキ {side} に読み込む",
+  loadLockedTitle: "デッキ {side} は再生中です。別の曲は読み込めません。停止するか、設定 ⚙ › 安全 でロックを解除してください。",
+  vuHeading: "レベルメーター（VU）",
+  vuModeContinuous: "連続（塗りつぶしバー）",
+  vuModeLed: "LED（ミキサーのようなセグメント）",
+  vuNote: "−42〜0 の dBFS スケール。−12 までが緑、−3 までがアンバー、デジタル上限際が赤。マーカーがピークを保持し、上部の赤いブロックがクリップを知らせます。",
+  vuChannelTitle: "チャンネルのレベル（dBFS、EQ 後・フェーダー前：フェーダーやクロスフェーダーの影響を受けません）",
+  vuMasterTitle: "マスター出力のレベル（dBFS、トリムとリミッターの後で測定）",
 };

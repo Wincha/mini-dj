@@ -201,4 +201,20 @@ export default {
   // Footer
   shortcuts:
     "Keyboard (active deck: Q=A, P=B or click the deck) — Space: play/pause · C: cue/stop · 1-3: hot cues · I/O: loop in/out · L: loop on/off · ←/→: nudge",
+  // Settings tabs, load lock and level meters
+  tabAudio: "Audio",
+  tabLibrary: "Library",
+  tabDisplay: "Display",
+  tabSafety: "Safety",
+  safetyHeading: "Safety while playing",
+  lockLoadWhilePlaying: "Don't load tracks onto a deck that is playing",
+  lockLoadWhilePlayingNote: "Keeps you from wrecking a live mix: while the deck is playing, its load buttons are disabled. Turn it off to go back to the old behaviour.",
+  loadToDeckTitle: "Load this track onto deck {side}",
+  loadLockedTitle: "Deck {side} is playing: you can't load another track. Stop it, or turn the lock off in Settings ⚙ › Safety.",
+  vuHeading: "Level meters (VU)",
+  vuModeContinuous: "Continuous (solid bar)",
+  vuModeLed: "LED (segments, like a mixer)",
+  vuNote: "dBFS scale from −42 to 0. Green up to −12, amber up to −3 and red against the digital ceiling; the marker holds the peak and the red block on top warns of clipping.",
+  vuChannelTitle: "Channel level in dBFS (post-EQ, pre-fader: independent of the fader and the crossfader)",
+  vuMasterTitle: "Master output level in dBFS (measured after the trim and the limiter)",
 };

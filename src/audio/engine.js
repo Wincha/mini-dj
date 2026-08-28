@@ -26,10 +26,19 @@ export class AudioEngine {
     this.limiter.attack.value = 0.003;
     this.limiter.release.value = 0.05;
 
+    // Medidor del master: cuelga DESPUÉS del limitador, así que mide la
+    // señal que sale de verdad por la tarjeta (con el trim del AGC y el
+    // recorte del limitador ya aplicados). El mixAnalyser de arriba sigue
+    // colgando antes del trim porque es el que realimenta al propio AGC:
+    // si midiera su salida, el lazo se cerraría sobre sí mismo.
+    this.masterMeter = this.ctx.createAnalyser();
+    this.masterMeter.fftSize = 2048; // ~43 ms: ventanas solapadas a 30 fps
+
     this.masterGain.connect(this.mixAnalyser);
     this.masterGain.connect(this.masterTrim);
     this.masterTrim.connect(this.limiter);
     this.limiter.connect(this.ctx.destination);
+    this.limiter.connect(this.masterMeter);
 
     // Stream del master para grabar la sesión (MediaRecorder)
     this.recordDest = this.ctx.createMediaStreamDestination();
@@ -76,6 +85,7 @@ export class AudioEngine {
       preGain: this.ctx.createGain(), // volumen del deck (slider)
       xfGain: this.ctx.createGain(), // coeficiente del crossfader
       analyser: this.ctx.createAnalyser(),
+      meter: this.ctx.createAnalyser(), // VU del canal (pre-fader)
       cueGain: this.ctx.createGain(), // envío a auriculares (PFL)
     };
 
@@ -86,6 +96,7 @@ export class AudioEngine {
       preGain: this.ctx.createGain(),
       xfGain: this.ctx.createGain(),
       analyser: this.ctx.createAnalyser(),
+      meter: this.ctx.createAnalyser(),
       cueGain: this.ctx.createGain(),
     };
 
@@ -103,6 +114,7 @@ export class AudioEngine {
     this.deckA.analyser.connect(this.masterGain);
     this.deckA.filter.connect(this.deckA.cueGain); // PFL pre-fader, post-EQ/filtro
     this.deckA.cueGain.connect(this.cueBus);
+    this.deckA.filter.connect(this.deckA.meter); // VU del canal: mismo punto que el PFL
 
     // Conexiones por deck (B)
     this.deckB.eqPreGain.connect(this.deckB.low);
@@ -115,12 +127,27 @@ export class AudioEngine {
     this.deckB.analyser.connect(this.masterGain);
     this.deckB.filter.connect(this.deckB.cueGain);
     this.deckB.cueGain.connect(this.cueBus);
+    this.deckB.filter.connect(this.deckB.meter);
 
     // Ajuste de analyser (ligero)
     [this.deckA.analyser, this.deckB.analyser].forEach((a) => {
       a.fftSize = 1024;
       a.smoothingTimeConstant = 0.8;
     });
+    // Los medidores leen la onda cruda (getFloatTimeDomainData no usa el
+    // suavizado), con ventana de 2048 muestras para no perderse picos cortos
+    [this.deckA.meter, this.deckB.meter].forEach((a) => {
+      a.fftSize = 2048;
+    });
+  }
+
+  // Analizador para los VU. "A"/"B" = canal post-EQ y pre-fader (como el PFL,
+  // así el nivel del canal no depende del fader ni del crossfader);
+  // cualquier otra cosa = salida real del master (post-trim, post-limitador).
+  getMeterAnalyser(which) {
+    if (which === "A") return this.deckA.meter;
+    if (which === "B") return this.deckB.meter;
+    return this.masterMeter;
   }
 
   resume() {

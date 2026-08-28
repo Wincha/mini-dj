@@ -22,6 +22,7 @@ function CentralMeters({
   masterBpm,
   setMasterBpm,
   onOpenConfig,
+  vuMode,
 }) {
   const { t } = useI18n();
   const [recording, setRecording] = useState(false);
@@ -140,7 +141,13 @@ function CentralMeters({
           title={t("masterVolTitle")}
           ariaLabel={t("master")}
         />
-        <VUBar engine={engine} side="Both" direction="horizontal" />
+        <VUBar
+          engine={engine}
+          side="master"
+          direction="horizontal"
+          mode={vuMode}
+          showScale
+        />
         {/* Master Sync */}
         <div className="flex items-center gap-2">
           <button

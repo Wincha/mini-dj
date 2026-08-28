@@ -195,4 +195,20 @@ export default {
 
   shortcuts:
     "Teclat (deck actiu: Q=A, P=B o clic al deck) — Espai: play/pausa · C: cue/stop · 1-3: hot cues · I/O: loop in/out · L: loop on/off · ←/→: nudge",
+  // Pestanyes de configuració, bloqueig de càrrega i VU
+  tabAudio: "Àudio",
+  tabLibrary: "Biblioteca",
+  tabDisplay: "Visualització",
+  tabSafety: "Seguretat",
+  safetyHeading: "Seguretat en directe",
+  lockLoadWhilePlaying: "No carregar pistes en un deck que està sonant",
+  lockLoadWhilePlayingNote: "Evita carregar-te la mescla en directe: mentre el deck reprodueix, els seus botons de càrrega surten desactivats. Desactiva-ho per tornar al comportament de sempre.",
+  loadToDeckTitle: "Carrega aquesta pista al deck {side}",
+  loadLockedTitle: "El deck {side} està sonant: no es pot carregar una altra pista. Atura'l o desactiva el bloqueig a Configuració ⚙ › Seguretat.",
+  vuHeading: "Mesuradors de nivell (VU)",
+  vuModeContinuous: "Continu (barra plena)",
+  vuModeLed: "LED (segments, com una taula)",
+  vuNote: "Escala en dBFS de −42 a 0. Verd fins a −12, ambre fins a −3 i vermell arran del sostre digital; el testimoni reté el pic i el bloc vermell de dalt avisa de saturació.",
+  vuChannelTitle: "Nivell del canal en dBFS (post-EQ, pre-fader: no depèn del fader ni del crossfader)",
+  vuMasterTitle: "Nivell de la sortida màster en dBFS (mesurat després del trim i del limitador)",
 };

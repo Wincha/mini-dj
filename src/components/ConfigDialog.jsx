@@ -46,13 +46,27 @@ function WavePreview({ colors }) {
   return <canvas ref={canvasRef} className="w-full h-10 rounded-lg" />;
 }
 
-// Diálogo de configuración: salidas de audio (tarjeta/salida por destino),
-// modo de análisis del tracklist y opciones de la lista. Los cambios se
-// aplican desde MiniDJPlayer.
+// Pestañas del diálogo. El orden es el del panel de arriba.
+const TABS = [
+  { id: "audio", labelKey: "tabAudio" },
+  { id: "library", labelKey: "tabLibrary" },
+  { id: "display", labelKey: "tabDisplay" },
+  { id: "safety", labelKey: "tabSafety" },
+];
+
+// Pestaña activa entre aperturas del diálogo: dura lo que la sesión de la
+// página, sin tocar el localStorage de la configuración.
+let lastTab = TABS[0].id;
+
+// Diálogo de configuración, repartido en pestañas: salidas de audio,
+// biblioteca y análisis, visualización y seguridad. Todo se guarda en el
+// mismo objeto `config` (localStorage "mini-dj-config") y lo aplica
+// MiniDJPlayer.
 export default function ConfigDialog({ open, onClose, config, onConfigChange }) {
   const { t } = useI18n();
   const [devices, setDevices] = useState([]);
   const [labelsAllowed, setLabelsAllowed] = useState(false);
+  const [tab, setTab] = useState(lastTab);
 
   const sinkSupported =
     typeof HTMLMediaElement !== "undefined" &&
@@ -76,6 +90,10 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
   useEffect(() => {
     if (open) refreshDevices();
   }, [open]);
+
+  useEffect(() => {
+    lastTab = tab;
+  }, [tab]);
 
   // Los nombres de los dispositivos requieren permiso de audio
   const requestLabels = async () => {
@@ -113,84 +131,58 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
     </label>
   );
 
-  return (
-    <div
-      className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl grid gap-4 max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{t("configHeading")}</h2>
+  // Bloques de ajustes, uno por pestaña. Todos van dentro del mismo panel de
+  // alto fijo, así que cambiar de pestaña no mueve ni redimensiona el diálogo.
+  const panels = {
+    audio: (
+      <div className="grid gap-3">
+        <h3 className="text-sm font-semibold text-neutral-300">
+          {t("audioOutputs")}
+        </h3>
+        {!labelsAllowed && devices.length > 0 && (
           <button
-            onClick={onClose}
-            className="px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 text-sm hover:bg-neutral-700"
-            title={t("close")}
+            onClick={requestLabels}
+            className="px-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-300 hover:bg-neutral-700 text-left"
           >
-            ✕
+            {t("requestLabels")}
           </button>
-        </div>
+        )}
+        {ctxSinkSupported ? (
+          deviceSelect("masterOut", t("masterMix"), t("defaultOutput"))
+        ) : (
+          <p className="text-[10px] text-neutral-500">{t("noMasterSink")}</p>
+        )}
+        {sinkSupported ? (
+          <>
+            {deviceSelect("cueOut", t("preListenOut"), t("defaultOutput"))}
+            {deviceSelect(
+              "deckAOut",
+              t("deckExternal", { side: "A" }),
+              t("internalMix")
+            )}
+            {deviceSelect(
+              "deckBOut",
+              t("deckExternal", { side: "B" }),
+              t("internalMix")
+            )}
+            <p className="text-[10px] text-neutral-500">{t("externalNote")}</p>
+          </>
+        ) : (
+          <p className="text-[10px] text-neutral-500">{t("noSinkSupport")}</p>
+        )}
+      </div>
+    ),
 
-        {/* Salidas de audio */}
-        <div className="grid gap-3">
-          <h3 className="text-sm font-semibold text-neutral-300">
-            {t("audioOutputs")}
-          </h3>
-          {!labelsAllowed && devices.length > 0 && (
-            <button
-              onClick={requestLabels}
-              className="px-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-300 hover:bg-neutral-700 text-left"
-            >
-              {t("requestLabels")}
-            </button>
-          )}
-          {ctxSinkSupported ? (
-            deviceSelect("masterOut", t("masterMix"), t("defaultOutput"))
-          ) : (
-            <p className="text-[10px] text-neutral-500">
-              {t("noMasterSink")}
-            </p>
-          )}
-          {sinkSupported ? (
-            <>
-              {deviceSelect("cueOut", t("preListenOut"), t("defaultOutput"))}
-              {deviceSelect(
-                "deckAOut",
-                t("deckExternal", { side: "A" }),
-                t("internalMix")
-              )}
-              {deviceSelect(
-                "deckBOut",
-                t("deckExternal", { side: "B" }),
-                t("internalMix")
-              )}
-              <p className="text-[10px] text-neutral-500">
-                {t("externalNote")}
-              </p>
-            </>
-          ) : (
-            <p className="text-[10px] text-neutral-500">
-              {t("noSinkSupport")}
-            </p>
-          )}
-        </div>
-
+    library: (
+      <div className="grid gap-4">
         {/* Análisis del tracklist */}
         <div className="grid gap-2">
           <h3 className="text-sm font-semibold text-neutral-300">
             {t("analysisHeading")}
           </h3>
           {[
-            {
-              value: "auto",
-              label: t("analysisAuto"),
-            },
-            {
-              value: "deck",
-              label: t("analysisDeck"),
-            },
+            { value: "auto", label: t("analysisAuto") },
+            { value: "deck", label: t("analysisDeck") },
           ].map((opt) => (
             <label
               key={opt.value}
@@ -232,6 +224,36 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
             />
             {t("showKey")}
           </label>
+        </div>
+      </div>
+    ),
+
+    display: (
+      <div className="grid gap-4">
+        {/* Modo de visualización de los VU */}
+        <div className="grid gap-2">
+          <h3 className="text-sm font-semibold text-neutral-300">
+            {t("vuHeading")}
+          </h3>
+          {[
+            { value: "continuous", label: t("vuModeContinuous") },
+            { value: "led", label: t("vuModeLed") },
+          ].map((opt) => (
+            <label
+              key={opt.value}
+              className="flex items-center gap-2 text-sm text-neutral-300 cursor-pointer"
+            >
+              <input
+                type="radio"
+                name="vuMode"
+                checked={(config.vuMode || "continuous") === opt.value}
+                onChange={() => set("vuMode", opt.value)}
+                className="accent-emerald-500"
+              />
+              {opt.label}
+            </label>
+          ))}
+          <p className="text-[10px] text-neutral-500">{t("vuNote")}</p>
         </div>
 
         {/* Colores de la onda */}
@@ -290,6 +312,76 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
 
           <WavePreview colors={waveColors} />
           <p className="text-[10px] text-neutral-500">{t("wavePaletteNote")}</p>
+        </div>
+      </div>
+    ),
+
+    safety: (
+      <div className="grid gap-2">
+        <h3 className="text-sm font-semibold text-neutral-300">
+          {t("safetyHeading")}
+        </h3>
+        <label className="flex items-center gap-2 text-sm text-neutral-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={config.lockLoadWhilePlaying !== false}
+            onChange={(e) => set("lockLoadWhilePlaying", e.target.checked)}
+            className="accent-emerald-500"
+          />
+          {t("lockLoadWhilePlaying")}
+        </label>
+        <p className="text-[10px] text-neutral-500">
+          {t("lockLoadWhilePlayingNote")}
+        </p>
+      </div>
+    ),
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl flex flex-col gap-3 max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">{t("configHeading")}</h2>
+          <button
+            onClick={onClose}
+            className="px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 text-sm hover:bg-neutral-700"
+            title={t("close")}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Pestañas temáticas */}
+        <div
+          role="tablist"
+          className="flex gap-1 border-b border-neutral-800 overflow-x-auto"
+        >
+          {TABS.map((tb) => (
+            <button
+              key={tb.id}
+              role="tab"
+              aria-selected={tab === tb.id}
+              onClick={() => setTab(tb.id)}
+              className={`px-3 py-1.5 text-xs font-semibold whitespace-nowrap border-b-2 -mb-px ${
+                tab === tb.id
+                  ? "border-emerald-400 text-neutral-100"
+                  : "border-transparent text-neutral-400 hover:text-neutral-200"
+              }`}
+            >
+              {t(tb.labelKey)}
+            </button>
+          ))}
+        </div>
+
+        {/* Alto fijo: el diálogo mide lo mismo en todas las pestañas */}
+        <div className="h-[min(24rem,58vh)] overflow-y-auto pr-1">
+          {panels[tab] || panels.audio}
         </div>
       </div>
     </div>
