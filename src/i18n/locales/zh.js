@@ -68,8 +68,8 @@ export default {
   filterOff: "关",
   kill: "静音",
   eqTitle: "均衡频段：右键 = 静音该频段 · 双击 = 归零",
-  gainTitle: "通道增益 · 双击 = 归零",
-  filterTitle: "DJ 滤波器：向左 = 低通，向右 = 高通 · 双击 = 关闭",
+  gainTitle: "通道增益 · 右键或双击 = 归零",
+  filterTitle: "DJ 滤波器：向左 = 低通，向右 = 高通 · 右键或双击 = 关闭",
   crossfader: "交叉推子",
 
   cueBus: "🎧 监听",

@@ -50,6 +50,10 @@ function EqColumn({
         step={0.5}
         value={eq.gain}
         onChange={(e) => setEq(side, { ...eq, gain: Number(e.target.value) })}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setEq(side, { ...eq, gain: 0 });
+        }}
         resetValue={0}
       />
       <button
@@ -74,6 +78,10 @@ function EqColumn({
         step={0.01}
         value={filt}
         onChange={(e) => onFilt(side, Number(e.target.value))}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onFilt(side, 0);
+        }}
         resetValue={0}
         format={(v) =>
           Math.abs(v) < 0.05

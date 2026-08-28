@@ -78,8 +78,8 @@ export default {
   filterOff: "OFF",
   kill: "KILL",
   eqTitle: "Banda de EQ: clic dereito = kill da banda · dobre clic = a cero",
-  gainTitle: "Ganancia da canle · dobre clic = a cero",
-  filterTitle: "Filtro DJ: arrastra á esquerda = paso baixo, á dereita = paso alto · dobre clic = OFF",
+  gainTitle: "Ganancia da canle · clic dereito ou dobre clic = a cero",
+  filterTitle: "Filtro DJ: arrastra á esquerda = paso baixo, á dereita = paso alto · clic dereito ou dobre clic = OFF",
   crossfader: "Crossfader",
 
   cueBus: "🎧 Cue",

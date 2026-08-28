@@ -78,8 +78,8 @@ export default {
   filterOff: "OFF",
   kill: "キル",
   eqTitle: "EQ 帯域：右クリック = 帯域キル · ダブルクリック = ゼロに戻す",
-  gainTitle: "チャンネルのゲイン · ダブルクリック = ゼロに戻す",
-  filterTitle: "DJ フィルター：左 = ローパス、右 = ハイパス · ダブルクリック = OFF",
+  gainTitle: "チャンネルのゲイン · 右クリックまたはダブルクリック = ゼロに戻す",
+  filterTitle: "DJ フィルター：左 = ローパス、右 = ハイパス · 右クリックまたはダブルクリック = OFF",
   crossfader: "クロスフェーダー",
 
   cueBus: "🎧 キュー",
