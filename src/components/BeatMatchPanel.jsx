@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { useI18n } from "../i18n/context";
 
 // Panel de beat-match: las dos ondas alrededor de su playhead (línea central).
 // Con los BPM igualados y los beats alineados, las marcas rojas coinciden.
 const WINDOW_SECONDS = 4;
 
-export default function BeatMatchPanel({ analysis, audioElsRef }) {
+function BeatMatchPanel({ analysis, audioElsRef }) {
   const { t } = useI18n();
   const canvasRef = useRef(null);
 
@@ -103,3 +103,5 @@ export default function BeatMatchPanel({ analysis, audioElsRef }) {
     </div>
   );
 }
+
+export default memo(BeatMatchPanel);

@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { HOT_CUE_COLORS } from "../lib/constants";
 
-export default function WaveformCanvas({
+function WaveformCanvas({
   waveData,
   beats,
   cuePoint,
@@ -366,3 +366,5 @@ export default function WaveformCanvas({
     />
   );
 }
+
+export default memo(WaveformCanvas);

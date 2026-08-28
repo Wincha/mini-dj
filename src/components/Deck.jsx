@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useRef,
   useState,
@@ -11,7 +12,7 @@ import { HOT_CUE_COLORS } from "../lib/constants";
 import { useI18n } from "../i18n/context";
 import { analyzeTrackLoudness, BeatDetect } from "../audio/utils";
 
-export default function Deck({
+function Deck({
   colorClass,
   engine,
   side,
@@ -501,6 +502,20 @@ export default function Deck({
     setBendPct(Math.max(-NUDGE_MAX, Math.min(NUDGE_MAX, pct)));
   };
 
+  // Handlers del canvas con identidad estable: así WaveformCanvas (memo) no
+  // se re-renderiza en cada movimiento del fader de pitch
+  const waveHandlersRef = useRef({});
+  const stableWave = useMemo(
+    () => ({
+      onSeek: (...a) => waveHandlersRef.current.onSeek?.(...a),
+      onDragSeek: (...a) => waveHandlersRef.current.onDragSeek?.(...a),
+      onNudge: (...a) => waveHandlersRef.current.onNudge?.(...a),
+      onNudgeEnd: (...a) => waveHandlersRef.current.onNudgeEnd?.(...a),
+      onWheelZoom: (...a) => waveHandlersRef.current.onWheelZoom?.(...a),
+    }),
+    []
+  );
+
   // === Quantize: imanta cues/loops/saltos al beat más cercano ===
   const [quantize, setQuantize] = useState(true);
   const snapToGrid = (time) => {
@@ -626,31 +641,52 @@ export default function Deck({
     nudgeEnd: () => releaseBend(),
   }));
 
-  // Pitch / tempo suave
+  // Pitch / tempo.
+  // Arrastrar el fader genera decenas de cambios por segundo: escribir
+  // playbackRate en cada uno (y peor, mantener una rampa por rAF viva)
+  // provoca microcortes en el audio. Aquí se agrupa en un solo write por
+  // frame y solo se rampa cuando el salto es grande (SYNC, reset...).
+  const pitchTargetRef = useRef(1);
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
     const target = 1 + (pitchPct + bendPct) / 100;
+    pitchTargetRef.current = target;
 
+    const RAMP_MS = 120;
+    const BIG_JUMP = 0.01; // 1% de tempo
+
+    // Salto pequeño (arrastre normal): un único write, agrupado por frame
+    if (Math.abs(target - el.playbackRate) < BIG_JUMP) {
+      if (pitchRafRef.current) return; // ya hay un write programado
+      pitchRafRef.current = requestAnimationFrame(() => {
+        pitchRafRef.current = null;
+        const elNow = audioRef.current;
+        if (!elNow) return;
+        const want = pitchTargetRef.current;
+        // ignorar cambios inaudibles (< 0.02 %)
+        if (Math.abs(want - elNow.playbackRate) > 0.0002) {
+          elNow.playbackRate = want;
+        }
+      });
+      return;
+    }
+
+    // Salto grande: rampa suave
     if (pitchRafRef.current) cancelAnimationFrame(pitchRafRef.current);
-
-    const DURATION_MS = 120;
     const startRate = el.playbackRate || 1;
     const start = performance.now();
-
     const step = (now) => {
-      const p = Math.min(1, (now - start) / DURATION_MS);
-      const k = p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
-      el.playbackRate = startRate + (target - startRate) * k;
-
-      if (p < 1) {
+      const k0 = Math.min(1, (now - start) / RAMP_MS);
+      const k = k0 < 0.5 ? 2 * k0 * k0 : -1 + (4 - 2 * k0) * k0;
+      el.playbackRate = startRate + (pitchTargetRef.current - startRate) * k;
+      if (k0 < 1) {
         pitchRafRef.current = requestAnimationFrame(step);
       } else {
         pitchRafRef.current = null;
-        el.playbackRate = target;
+        el.playbackRate = pitchTargetRef.current;
       }
     };
-
     pitchRafRef.current = requestAnimationFrame(step);
     return () => {
       if (pitchRafRef.current) cancelAnimationFrame(pitchRafRef.current);
@@ -658,10 +694,27 @@ export default function Deck({
     };
   }, [pitchPct, bendPct]);
 
+  // El fader emite muchos eventos por frame al arrastrarlo; agrupamos la
+  // actualización de estado en uno por frame para no re-renderizar de más
+  const pitchPendingRef = useRef(null);
+  const pitchCommitRef = useRef(null);
   const onPitchChange = (val) => {
     const v = Math.max(-pitchRange, Math.min(pitchRange, Number(val)));
-    setPitchPct(side, v);
+    pitchPendingRef.current = v;
+    if (pitchCommitRef.current) return;
+    pitchCommitRef.current = requestAnimationFrame(() => {
+      pitchCommitRef.current = null;
+      const pending = pitchPendingRef.current;
+      if (pending != null) setPitchPct(side, pending);
+    });
   };
+
+  useEffect(
+    () => () => {
+      if (pitchCommitRef.current) cancelAnimationFrame(pitchCommitRef.current);
+    },
+    []
+  );
 
   const onRangeChange = (e) => {
     const r = Number(e.target.value);
@@ -696,6 +749,22 @@ export default function Deck({
     };
     bendRafRef.current = requestAnimationFrame(step);
   }
+
+  waveHandlersRef.current = {
+    onSeek: (time) => {
+      const el = audioRef.current;
+      if (!el) return;
+      el.currentTime = time;
+      setCurrent(time);
+      setFollow(false);
+      setCueIfPaused(time);
+    },
+    onDragSeek,
+    onNudge,
+    onNudgeEnd: releaseBend,
+    onWheelZoom: (dir) =>
+      setZoom((z) => Math.max(1, Math.min(256, dir > 0 ? z * 2 : z / 2))),
+  };
 
   return (
     <div
@@ -815,22 +884,11 @@ export default function Deck({
                 zoom={zoom}
                 scroll={scroll}
                 follow={follow}
-                onSeek={(time) => {
-                  const el = audioRef.current;
-                  if (!el) return;
-                  el.currentTime = time;
-                  setCurrent(time);
-                  setFollow(false);
-                  setCueIfPaused(time);
-                }}
-                onDragSeek={onDragSeek}
-                onNudge={onNudge}
-                onNudgeEnd={releaseBend}
-                onWheelZoom={(dir) =>
-                  setZoom((z) =>
-                    Math.max(1, Math.min(256, dir > 0 ? z * 2 : z / 2))
-                  )
-                }
+                onSeek={stableWave.onSeek}
+                onDragSeek={stableWave.onDragSeek}
+                onNudge={stableWave.onNudge}
+                onNudgeEnd={stableWave.onNudgeEnd}
+                onWheelZoom={stableWave.onWheelZoom}
               />
               {/* Feedback de análisis */}
               {analyzing === "wave" && (
@@ -1180,6 +1238,8 @@ export default function Deck({
     </div>
   );
 }
+
+export default memo(Deck);
 
 // Grupo de herramientas del deck: etiqueta pequeña + botones en una caja
 function Group({ label, children }) {

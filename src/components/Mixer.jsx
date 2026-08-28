@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { memo, useState, useEffect } from "react";
 import Fader from "./Fader";
 import VUBar from "./VUBar";
 import Knob from "./Knob";
@@ -92,7 +92,7 @@ function EqColumn({
   );
 }
 
-export default function Mixer({
+function Mixer({
   engine,
   eq,
   setEq,
@@ -258,3 +258,5 @@ export default function Mixer({
     </div>
   );
 }
+
+export default memo(Mixer);

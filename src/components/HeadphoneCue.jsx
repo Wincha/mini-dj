@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import Fader from "./Fader";
 import { useI18n } from "../i18n/context";
 
 // PFL / pre-escucha: envía el deck (pre-fader, post-EQ) a la salida elegida
 // en Config (⚙). Solo tiene sentido con dos dispositivos: el master sigue
 // saliendo por su propia salida.
-export default function HeadphoneCue({ engine, cueDeviceId }) {
+function HeadphoneCue({ engine, cueDeviceId }) {
   const { t } = useI18n();
   const [pfl, setPfl] = useState({ A: false, B: false });
   const [hpVol, setHpVol] = useState(1);
@@ -88,3 +88,5 @@ export default function HeadphoneCue({ engine, cueDeviceId }) {
     </div>
   );
 }
+
+export default memo(HeadphoneCue);

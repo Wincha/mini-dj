@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n/context";
 
 function formatSize(bytes) {
@@ -14,7 +14,7 @@ function formatDuration(s) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-export default function TrackList({
+function TrackList({
   tracks,
   deckTracks,
   onAddTracks,
@@ -249,3 +249,5 @@ export default function TrackList({
     </div>
   );
 }
+
+export default memo(TrackList);

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import Fader from "./Fader";
 import VUBar from "./VUBar";
 import BeatMatchPanel from "./BeatMatchPanel";
@@ -11,7 +11,7 @@ function formatRecTime(s) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-export default function CentralMeters({
+function CentralMeters({
   engine,
   master,
   setMaster,
@@ -190,3 +190,5 @@ export default function CentralMeters({
     </div>
   );
 }
+
+export default memo(CentralMeters);

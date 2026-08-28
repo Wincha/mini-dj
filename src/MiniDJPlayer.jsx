@@ -59,6 +59,12 @@ export default function MiniDJMixer() {
   // Deck activo: recibe los atajos de teclado
   const [activeDeck, setActiveDeck] = useState("A");
   const deckRefs = useRef({ A: null, B: null });
+  const setDeckRefA = useCallback((api) => {
+    deckRefs.current.A = api;
+  }, []);
+  const setDeckRefB = useCallback((api) => {
+    deckRefs.current.B = api;
+  }, []);
   const audioElsRef = useRef({ A: null, B: null });
 
   // Salidas dedicadas por deck (modo mezcla externa)
@@ -207,31 +213,31 @@ export default function MiniDJMixer() {
     [engine]
   );
 
-  const onVolChange = (which, v) => {
+  const onVolChange = useCallback((which, v) => {
     if (which === "A") setVolA(v);
     else setVolB(v);
-  };
+  }, []);
 
   // El Mixer aplica el EQ efectivo al grafo (incluye los kills de banda)
-  const setEq = (which, vals) => {
+  const setEq = useCallback((which, vals) => {
     if (which === "A") setEqA(vals);
     else setEqB(vals);
-  };
+  }, []);
 
-  const setPitchRange = (which, r) => {
+  const setPitchRange = useCallback((which, r) => {
     if (which === "A") setRangeA(r);
     else setRangeB(r);
-  };
+  }, []);
 
-  const setKeyLock = (which, val) => {
+  const setKeyLock = useCallback((which, val) => {
     if (which === "A") setKeyLockA(val);
     else setKeyLockB(val);
-  };
+  }, []);
 
-  const setPitchPct = (which, v) => {
+  const setPitchPct = useCallback((which, v) => {
     if (which === "A") setPitchPctA(v);
     else setPitchPctB(v);
-  };
+  }, []);
 
   // BPM detectado en un deck: actualiza sync y, si la pista vino de la lista,
   // completa sus datos (útil en modo "analizar solo al cargar en deck")
@@ -282,9 +288,13 @@ export default function MiniDJMixer() {
   }, []);
 
   // SYNC continuo: alterna el modo sync del deck
-  const onSync = (side) => {
+  const onSync = useCallback((side) => {
     setSyncOn((prev) => ({ ...prev, [side]: !prev[side] }));
-  };
+  }, []);
+
+  const onAutoGainComputed = useCallback((side, gainDb) => {
+    setDeckAutoGain((prev) => ({ ...prev, [side]: gainDb }));
+  }, []);
 
   const onToggleMasterSync = () => {
     setMasterSyncOn((prev) => {
@@ -342,9 +352,11 @@ export default function MiniDJMixer() {
     pitchPctB,
     rangeA,
     rangeB,
+    setPitchPct,
+    setPitchRange,
   ]);
 
-  const onAddTracks = (files) => {
+  const onAddTracks = useCallback((files) => {
     setTracks((prev) => {
       const next = [...prev];
       for (const file of files) {
@@ -367,19 +379,19 @@ export default function MiniDJMixer() {
       }
       return next;
     });
-  };
+  }, []);
 
-  const onLoadToDeck = (side, track) => {
+  const onLoadToDeck = useCallback((side, track) => {
     setDeckTracks((prev) => ({
       ...prev,
       [side]: { ...track, loadToken: (prev[side]?.loadToken || 0) + 1 },
     }));
-  };
+  }, []);
 
-  const onRemoveTrack = (id) => {
+  const onRemoveTrack = useCallback((id) => {
     setTracks((prev) => prev.filter((t) => t.id !== id));
     removeStoredTrack(id);
-  };
+  }, []);
 
   // === Atajos de teclado (actúan sobre el deck activo) ===
   useEffect(() => {
@@ -465,6 +477,9 @@ export default function MiniDJMixer() {
     return Boolean(bpms[side] && (masterSyncOn || bpms[other]));
   };
 
+  const eqPair = useMemo(() => ({ A: eqA, B: eqB }), [eqA, eqB]);
+  const volPair = useMemo(() => ({ A: volA, B: volB }), [volA, volB]);
+
   return (
     <div className="min-h-screen w-full bg-neutral-950 text-neutral-100 p-3 sm:p-6">
       <div className="mx-auto grid gap-4 sm:gap-6">
@@ -485,9 +500,7 @@ export default function MiniDJMixer() {
         {/* Decks */}
         <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
           <Deck
-            ref={(api) => {
-              deckRefs.current.A = api;
-            }}
+            ref={setDeckRefA}
             colorClass="from-cyan-500/20 to-transparent"
             engine={engine}
             side="A"
@@ -512,22 +525,18 @@ export default function MiniDJMixer() {
             externalTrack={deckTracks.A}
             isActive={activeDeck === "A"}
             onActivate={setActiveDeck}
-            onAutoGainComputed={(side, gainDb) =>
-              setDeckAutoGain((prev) => ({ ...prev, [side]: gainDb }))
-            }
+            onAutoGainComputed={onAutoGainComputed}
           />
           <Mixer
             engine={engine}
-            eq={{ A: eqA, B: eqB }}
+            eq={eqPair}
             setEq={setEq}
-            vol={{ A: volA, B: volB }}
+            vol={volPair}
             onVolChange={onVolChange}
             deckAutoGain={deckAutoGain}
           />
           <Deck
-            ref={(api) => {
-              deckRefs.current.B = api;
-            }}
+            ref={setDeckRefB}
             colorClass="from-fuchsia-500/20 to-transparent"
             engine={engine}
             side="B"
@@ -552,9 +561,7 @@ export default function MiniDJMixer() {
             externalTrack={deckTracks.B}
             isActive={activeDeck === "B"}
             onActivate={setActiveDeck}
-            onAutoGainComputed={(side, gainDb) =>
-              setDeckAutoGain((prev) => ({ ...prev, [side]: gainDb }))
-            }
+            onAutoGainComputed={onAutoGainComputed}
           />
         </div>
 
