@@ -55,6 +55,8 @@ export default {
   hotCueGoTitle:
     "Hot cue {n}: saltar a {time} · borrar con click derecho o Shift+click",
   jump: "Jump",
+  hotCuesLabel: "Hot cues",
+  gridLabel: "Rejilla",
   jumpBackTitle: "Salta {n} beats hacia atrás",
   jumpFwdTitle: "Salta {n} beats hacia delante",
   jumpSizeTitle: "Tamaño del salto en beats",

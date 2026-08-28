@@ -52,6 +52,8 @@ export default {
   hotCueGoTitle:
     "Hot cue {n}: saltar para {time} · apagar com clique direito ou Shift+clique",
   jump: "Jump",
+  hotCuesLabel: "Hot cues",
+  gridLabel: "Grelha",
   jumpBackTitle: "Salta {n} beats para trás",
   jumpFwdTitle: "Salta {n} beats para a frente",
   jumpSizeTitle: "Tamanho do salto em beats",

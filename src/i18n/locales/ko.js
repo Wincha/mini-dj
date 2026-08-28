@@ -52,6 +52,8 @@ export default {
   hotCueGoTitle:
     "핫큐 {n}: {time}로 이동 · 오른쪽 클릭 또는 Shift+클릭으로 삭제",
   jump: "점프",
+  hotCuesLabel: "핫큐",
+  gridLabel: "그리드",
   jumpBackTitle: "{n} 비트 뒤로 이동",
   jumpFwdTitle: "{n} 비트 앞으로 이동",
   jumpSizeTitle: "점프할 비트 수",

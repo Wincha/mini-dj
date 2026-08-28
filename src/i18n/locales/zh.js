@@ -44,6 +44,8 @@ export default {
   hotCueSetTitle: "热点 {n}：设在当前位置",
   hotCueGoTitle: "热点 {n}：跳至 {time} · 右键或 Shift+点击删除",
   jump: "跳转",
+  hotCuesLabel: "热点",
+  gridLabel: "网格",
   jumpBackTitle: "向后跳 {n} 拍",
   jumpFwdTitle: "向前跳 {n} 拍",
   jumpSizeTitle: "跳转的拍数",

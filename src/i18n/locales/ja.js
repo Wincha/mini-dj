@@ -52,6 +52,8 @@ export default {
   hotCueGoTitle:
     "ホットキュー {n}：{time} へジャンプ · 右クリックまたは Shift+クリックで削除",
   jump: "ジャンプ",
+  hotCuesLabel: "ホットキュー",
+  gridLabel: "グリッド",
   jumpBackTitle: "{n} ビート戻る",
   jumpFwdTitle: "{n} ビート進む",
   jumpSizeTitle: "ジャンプするビート数",

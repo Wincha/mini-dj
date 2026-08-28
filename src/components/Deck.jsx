@@ -708,8 +708,8 @@ export default function Deck({
         className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${colorClass}`}
       />
       <div className="relative grid gap-4">
-        <header className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold tracking-tight shrink-0">
+        <header className="flex items-start justify-between gap-3">
+          <h2 className="text-lg font-semibold tracking-tight shrink-0 pt-1">
             {t("deck", { side })}
             {isActive && (
               <span
@@ -720,17 +720,20 @@ export default function Deck({
               </span>
             )}
           </h2>
-          <span className="text-xs text-neutral-400 truncate min-w-0">
-            {getFilenameWithoutExtension()}
-          </span>
-        </header>
-        {/* Archivo (botón propio: el input nativo no se puede traducir) */}
-        <div className="flex items-center gap-3 min-w-0">
+          {/* Cargar archivo y nombre de la pista en un solo control */}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-2 rounded-xl bg-neutral-200 text-neutral-900 text-sm font-semibold hover:bg-white/90 whitespace-nowrap"
+            title={t("loadFile")}
+            className="flex items-center gap-2 min-w-40 max-w-[70%] px-3 py-1.5 rounded-xl border border-neutral-700 bg-neutral-800/70 hover:bg-neutral-700/70 text-left"
           >
-            {t("loadFile")}
+            <span className="text-base shrink-0">📂</span>
+            <span
+              className={`truncate text-base font-semibold ${
+                objectUrl ? "text-neutral-100" : "text-neutral-500"
+              }`}
+            >
+              {getFilenameWithoutExtension()}
+            </span>
           </button>
           <input
             ref={fileInputRef}
@@ -739,7 +742,7 @@ export default function Deck({
             onChange={onFile}
             className="hidden"
           />
-        </div>
+        </header>
         {/* Content */}
         <div className="flex flex-row gap-3 w-full">
           <div className="flex flex-col gap-1 flex-1 min-w-0">
@@ -946,9 +949,9 @@ export default function Deck({
                 {t("keyLock")}
               </button>
             </div>
-            {/* Hot cues + Jump + Loop, alineados y separados del transporte */}
-            <div className="flex items-center gap-x-4 gap-y-2 flex-wrap text-xs mt-1 pt-3 border-t border-neutral-800/70">
-              <div className="flex items-center gap-1">
+            {/* Herramientas agrupadas: hot cues · jump · rejilla · loop */}
+            <div className="flex flex-wrap items-stretch gap-2 text-xs mt-1 pt-3 border-t border-neutral-800/70">
+              <Group label={t("hotCuesLabel")}>
                 {hotCues.map((cueT, i) => (
                   <button
                     key={i}
@@ -987,14 +990,13 @@ export default function Deck({
                     {i + 1}
                   </button>
                 ))}
-              </div>
-              {/* Beat jump */}
-              <div className="flex items-center gap-1">
-                <span className="text-neutral-500 mr-1">{t("jump")}</span>
+              </Group>
+
+              <Group label={t("jump")}>
                 <button
                   onClick={() => beatJump(-1)}
                   disabled={!objectUrl || !bpm}
-                  className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-bold disabled:opacity-40"
+                  className="w-7 h-7 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-bold disabled:opacity-40"
                   title={t("jumpBackTitle", { n: jumpBeats })}
                 >
                   «
@@ -1003,7 +1005,7 @@ export default function Deck({
                   value={jumpBeats}
                   onChange={(e) => setJumpBeats(Number(e.target.value))}
                   disabled={!objectUrl || !bpm}
-                  className="bg-neutral-800 border border-neutral-700 rounded-lg px-1 py-1 disabled:opacity-40"
+                  className="h-7 bg-neutral-800 border border-neutral-700 rounded-lg px-1 disabled:opacity-40"
                   title={t("jumpSizeTitle")}
                 >
                   {[1, 2, 4, 8, 16, 32].map((n) => (
@@ -1015,15 +1017,18 @@ export default function Deck({
                 <button
                   onClick={() => beatJump(+1)}
                   disabled={!objectUrl || !bpm}
-                  className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-bold disabled:opacity-40"
+                  className="w-7 h-7 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-bold disabled:opacity-40"
                   title={t("jumpFwdTitle", { n: jumpBeats })}
                 >
                   »
                 </button>
+              </Group>
+
+              <Group label={t("gridLabel")}>
                 <button
                   onClick={onTapBeat}
                   disabled={!objectUrl}
-                  className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-semibold active:bg-orange-400 active:text-black disabled:opacity-40"
+                  className="h-7 px-2 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-semibold active:bg-orange-400 active:text-black disabled:opacity-40"
                   title={t("tapTitle")}
                 >
                   {t("tap")}
@@ -1031,7 +1036,7 @@ export default function Deck({
                 <button
                   onClick={() => setQuantize((q) => !q)}
                   disabled={!objectUrl}
-                  className={`px-2 py-1 rounded-lg border font-bold disabled:opacity-40 ${
+                  className={`w-7 h-7 rounded-lg border font-bold disabled:opacity-40 ${
                     quantize
                       ? "bg-violet-500/80 border-violet-400 text-black"
                       : "bg-neutral-800 border-neutral-700 text-neutral-400"
@@ -1040,13 +1045,13 @@ export default function Deck({
                 >
                   Q
                 </button>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-neutral-500 mr-1">{t("loop")}</span>
+              </Group>
+
+              <Group label={t("loop")}>
                 <button
                   onClick={setLoopInNow}
                   disabled={!objectUrl}
-                  className={`px-2 py-1 rounded-lg border disabled:opacity-40 ${
+                  className={`h-7 px-2 rounded-lg border disabled:opacity-40 ${
                     loopIn != null
                       ? "bg-sky-500/30 border-sky-500/50 text-sky-300"
                       : "bg-neutral-800 border-neutral-700 text-neutral-300"
@@ -1058,7 +1063,7 @@ export default function Deck({
                 <button
                   onClick={setLoopOutNow}
                   disabled={!objectUrl || loopIn == null}
-                  className={`px-2 py-1 rounded-lg border disabled:opacity-40 ${
+                  className={`h-7 px-2 rounded-lg border disabled:opacity-40 ${
                     loopOut != null
                       ? "bg-sky-500/30 border-sky-500/50 text-sky-300"
                       : "bg-neutral-800 border-neutral-700 text-neutral-300"
@@ -1070,7 +1075,7 @@ export default function Deck({
                 <button
                   onClick={() => autoLoop(4)}
                   disabled={!objectUrl || !bpm}
-                  className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 disabled:opacity-40"
+                  className="w-7 h-7 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 disabled:opacity-40"
                   title={t("loop4Title")}
                 >
                   4
@@ -1078,7 +1083,7 @@ export default function Deck({
                 <button
                   onClick={() => autoLoop(8)}
                   disabled={!objectUrl || !bpm}
-                  className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 disabled:opacity-40"
+                  className="w-7 h-7 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 disabled:opacity-40"
                   title={t("loop8Title")}
                 >
                   8
@@ -1086,7 +1091,7 @@ export default function Deck({
                 <button
                   onClick={toggleLoop}
                   disabled={loopIn == null || loopOut == null}
-                  className={`px-2 py-1 rounded-lg border font-semibold disabled:opacity-40 ${
+                  className={`w-7 h-7 rounded-lg border font-semibold disabled:opacity-40 ${
                     loopOn
                       ? "bg-emerald-500 border-emerald-400 text-black"
                       : "bg-neutral-800 border-neutral-700 text-neutral-300"
@@ -1095,7 +1100,7 @@ export default function Deck({
                 >
                   ⟳
                 </button>
-              </div>
+              </Group>
             </div>
           </div>
           <div className="flex flex-col gap-2 w-24 shrink-0 items-center">
@@ -1172,6 +1177,18 @@ export default function Deck({
           crossOrigin="anonymous"
         />
       </div>
+    </div>
+  );
+}
+
+// Grupo de herramientas del deck: etiqueta pequeña + botones en una caja
+function Group({ label, children }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900/40 px-2 py-1">
+      <span className="text-[9px] uppercase tracking-wide text-neutral-500">
+        {label}
+      </span>
+      <div className="flex items-center gap-1">{children}</div>
     </div>
   );
 }

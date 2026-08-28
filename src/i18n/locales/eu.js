@@ -52,6 +52,8 @@ export default {
   hotCueGoTitle:
     "Hot cue {n}: {time}-ra jauzi · ezabatu eskuin-klikarekin edo Shift+klik",
   jump: "Jump",
+  hotCuesLabel: "Hot cueak",
+  gridLabel: "Sareta",
   jumpBackTitle: "{n} beat atzera egin",
   jumpFwdTitle: "{n} beat aurrera egin",
   jumpSizeTitle: "Jauziaren tamaina beat-etan",

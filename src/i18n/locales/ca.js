@@ -52,6 +52,8 @@ export default {
   hotCueGoTitle:
     "Hot cue {n}: saltar a {time} · esborrar amb clic dret o Maj+clic",
   jump: "Jump",
+  hotCuesLabel: "Hot cues",
+  gridLabel: "Graella",
   jumpBackTitle: "Salta {n} beats enrere",
   jumpFwdTitle: "Salta {n} beats endavant",
   jumpSizeTitle: "Mida del salt en beats",
