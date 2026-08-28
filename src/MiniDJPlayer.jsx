@@ -13,6 +13,7 @@ import Mixer from "./components/Mixer";
 import TrackList from "./components/TrackList";
 import HeadphoneCue from "./components/HeadphoneCue";
 import ConfigDialog from "./components/ConfigDialog";
+import UpdateToast from "./components/UpdateToast";
 import { useI18n } from "./i18n/context";
 import { buildWavePalette, resolveWaveColors } from "./lib/waveColors";
 
@@ -729,6 +730,9 @@ export default function MiniDJMixer() {
         config={config}
         onConfigChange={setConfig}
       />
+
+      {/* Aviso de actualización: no pinta nada fuera de la app de escritorio */}
+      <UpdateToast />
     </div>
   );
 }

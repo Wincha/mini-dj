@@ -73,7 +73,9 @@ How it is wired:
   which is an opaque origin and makes IndexedDB/localStorage unreliable and breaks secure-context
   APIs like `getUserMedia` and `setSinkId`). A CSP is sent as a response header on that scheme.
 - `electron/preload.cjs` – minimal bridge; exposes only `window.miniDJDesktop`
-  (`isDesktop`, `platform`, versions). No Node API reaches the page.
+  (`isDesktop`, `platform`, versions, and the update state / install call). No Node API
+  reaches the page.
+- `electron/updater.cjs` – auto-update; see below.
 - Media permission is granted in the session. Without it `enumerateDevices()` returns
   outputs with empty labels and the ⚙ Config device pickers come up blank.
 - `backgroundThrottling` is disabled so waveforms and background analysis keep running
@@ -93,9 +95,23 @@ git push --follow-tags
 ```
 
 ### Auto-update
-Not enabled. `electron-builder.yml` already has the GitHub `publish` block that
-`electron-updater` needs, so wiring it up later is adding the dependency and the check call —
-nothing here has to change.
+Enabled on Windows and on the Linux AppImage, via `electron-updater`
+(`electron/updater.cjs`). Eight seconds after start-up the app asks GitHub for the
+latest **published** release, downloads the installer in the background and shows a
+toast offering to restart and install; if you dismiss it, the update is applied when
+you close the app. A failed check (no network, rate limit) is logged and ignored — it
+never interrupts a set.
+
+Three things worth knowing:
+- **A draft release does not exist for the updater.** The public GitHub API does not
+  return drafts, so the release has to be published before anyone gets it. The
+  workflow still uploads as a draft on purpose, so you review before shipping.
+- **The version that checks is the installed one.** Any build older than the one that
+  first shipped `electron-updater` will never update itself, however many releases go
+  out; it has to be installed by hand once.
+- **macOS is excluded** because auto-update requires a signed app, and **the Linux
+  `.deb` is excluded** because that is the package manager's job. Both are skipped
+  explicitly rather than left to fail at run time.
 
 ### Desktop limitations
 - **Windows**: the installer and the app are not code-signed. SmartScreen will show

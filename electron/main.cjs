@@ -16,6 +16,7 @@ const {
 } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { initAutoUpdate } = require("./updater.cjs");
 
 const isDev = !app.isPackaged;
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || "";
@@ -217,6 +218,9 @@ if (!app.requestSingleInstanceLock()) {
     // En macOS se conserva el menú de la app (copiar/pegar, ocultar…)
     if (process.platform !== "darwin") Menu.setApplicationMenu(null);
     createWindow();
+    // La ventana se pide cuando hace falta: en macOS se puede cerrar y volver
+    // a abrir, y el updater dura más que ella
+    initAutoUpdate(() => BrowserWindow.getAllWindows()[0] || null);
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
