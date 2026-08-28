@@ -17,7 +17,7 @@ Two‑deck DJ app built with React, Vite and Tailwind — everything runs locall
 
 ### Mixing
 - Mixer with **dipless crossfader** (each deck at full gain on its own half; only the opposite side attenuates), deck volume faders and VU meters per deck and mix bus.
-- Mixing-desk style faders (`Fader` component, reused everywhere): rectangular head with a centre line, lit travelled section over a darker rail, optional scale ticks, fill from the start or from the centre (pitch, crossfader), and a `native` variant — all configurable per instance.
+- Mixing-desk style faders (`Fader` component, reused everywhere): rectangular head with a centre line, lit travelled section over a darker rail, optional scale ticks, fill from the start or from the centre (pitch, crossfader), a `native` variant, and right‑click to snap back to the default position — all configurable per instance.
 - Per‑deck EQ (gain/high/mid/low) with band **kills** (right‑click a knob; double‑click resets), plus auto‑gain (on by default): the whole track is analyzed once on load and a single static gain is applied — no pumping during playback — referenced to the loud part of the song and capped so peaks never pass −1 dBFS.
 - DJ **filter** knob per deck: one control sweeping LPF (left) ↔ HPF (right), off at center.
 - Continuous **SYNC** per deck: while engaged the deck keeps following its tempo source — the other deck's effective BPM or the adjustable **Master Sync** BPM — and the button shows which (SYNC·A/B or SYNC·MST). Pitch range auto‑expands as needed.

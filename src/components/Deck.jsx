@@ -794,7 +794,9 @@ export default function Deck({
               thickness={16}
               railThickness={5}
               accent={side === "A" ? "#22d3ee" : "#e879f9"}
-              ariaLabel="Seek"
+              resetValue={cuePoint}
+              title={t("seekTitle")}
+              ariaLabel={t("seekTitle")}
             />
             {/* Forma de onda */}
             <div className="relative w-full pb-7">
@@ -1120,6 +1122,8 @@ export default function Deck({
                 ticks={9}
                 invert={true}
                 accent="#7dd3fc"
+                resetValue={0}
+                title={t("pitchFaderTitle")}
                 ariaLabel={t("pitch")}
               />
             </div>

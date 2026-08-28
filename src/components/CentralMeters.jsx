@@ -136,6 +136,8 @@ export default function CentralMeters({
           onChange={(e) => setMaster(Number(e.target.value))}
           ticks={11}
           accent="#34d399"
+          resetValue={1}
+          title={t("masterVolTitle")}
           ariaLabel={t("master")}
         />
         <VUBar engine={engine} side="Both" direction="horizontal" />

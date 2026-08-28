@@ -71,6 +71,13 @@ export default {
   gainTitle: "通道增益 · 右键或双击 = 归零",
   filterTitle: "DJ 滤波器：向左 = 低通，向右 = 高通 · 右键或双击 = 关闭",
   crossfader: "交叉推子",
+  resetHint: "右键 = 回到初始位置",
+  volumeTitle: "打碟机 {side} 音量",
+  crossfaderTitle: "交叉推子：在打碟机 A 与 B 之间混合",
+  masterVolTitle: "总输出音量",
+  seekTitle: "音轨中的位置",
+  pitchFaderTitle: "音高推子：改变速度",
+  cueVolTitle: "预监听音量",
 
   cueBus: "🎧 监听",
   cueBusTitle: "预监听（推子前）。在设置 ⚙ 中选择耳机输出",

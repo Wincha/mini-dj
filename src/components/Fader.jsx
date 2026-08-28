@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useI18n } from "../i18n/context";
 
 /**
  * Fader reutilizable con aspecto de mesa de mezclas.
@@ -9,6 +10,7 @@ import { useMemo } from "react";
  *   útil para pitch/crossfader) o "none"
  * - ticks: número de marcas de escala a pintar en el carril (0 = ninguna)
  * - invert: máximo abajo/izquierda (pitch estilo Technics)
+ * - resetValue: valor al que vuelve con click derecho (posición inicial)
  *
  * Por dentro sigue siendo un <input type="range">: mantiene teclado,
  * accesibilidad y el arrastre nativo; solo se dibuja encima.
@@ -32,8 +34,20 @@ export default function Fader({
   className = "",
   title,
   ariaLabel,
+  resetValue, // click derecho → vuelve aquí
 }) {
+  const { t } = useI18n();
   const vertical = orientation === "vertical";
+  const hasReset = resetValue !== undefined && typeof onChange === "function";
+  const fullTitle = [title, hasReset ? t("resetHint") : null]
+    .filter(Boolean)
+    .join(" · ");
+  const onContextMenu = hasReset
+    ? (e) => {
+        e.preventDefault();
+        onChange({ target: { value: resetValue } });
+      }
+    : undefined;
   const range = max - min || 1;
   const pct = Math.max(0, Math.min(1, (value - min) / range));
   // Fracción hacia el extremo "alto" según la orientación visual
@@ -56,8 +70,9 @@ export default function Fader({
         step={step}
         value={value}
         onChange={onChange}
+        onContextMenu={onContextMenu}
         disabled={disabled}
-        title={title}
+        title={fullTitle || undefined}
         aria-label={ariaLabel}
         style={
           vertical
@@ -105,7 +120,8 @@ export default function Fader({
     <div
       className={`relative select-none ${disabled ? "opacity-50" : ""} ${className}`}
       style={containerStyle}
-      title={title}
+      title={fullTitle || undefined}
+      onContextMenu={onContextMenu}
     >
       {/* Carril de fondo (apagado) */}
       <div

@@ -81,6 +81,13 @@ export default {
   gainTitle: "チャンネルのゲイン · 右クリックまたはダブルクリック = ゼロに戻す",
   filterTitle: "DJ フィルター：左 = ローパス、右 = ハイパス · 右クリックまたはダブルクリック = OFF",
   crossfader: "クロスフェーダー",
+  resetHint: "右クリック = 初期位置に戻す",
+  volumeTitle: "デッキ {side} の音量",
+  crossfaderTitle: "クロスフェーダー：デッキ A と B のミックス",
+  masterVolTitle: "全体の出力音量",
+  seekTitle: "トラック内の位置",
+  pitchFaderTitle: "ピッチフェーダー：テンポを変える",
+  cueVolTitle: "プリリスニングの音量",
 
   cueBus: "🎧 キュー",
   cueBusTitle:

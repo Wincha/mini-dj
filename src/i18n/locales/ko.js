@@ -81,6 +81,13 @@ export default {
   gainTitle: "채널 게인 · 오른쪽 클릭 또는 더블 클릭 = 0으로",
   filterTitle: "DJ 필터: 왼쪽 = 로우패스, 오른쪽 = 하이패스 · 오른쪽 클릭 또는 더블 클릭 = OFF",
   crossfader: "크로스페이더",
+  resetHint: "오른쪽 클릭 = 초기 위치로",
+  volumeTitle: "덱 {side} 볼륨",
+  crossfaderTitle: "크로스페이더: 덱 A와 B 사이의 믹스",
+  masterVolTitle: "전체 출력 볼륨",
+  seekTitle: "트랙 내 위치",
+  pitchFaderTitle: "피치 페이더: 템포 변경",
+  cueVolTitle: "프리 리스닝 볼륨",
 
   cueBus: "🎧 큐",
   cueBusTitle:

@@ -81,6 +81,13 @@ export default {
   gainTitle: "Ganho do canal · clique direito ou duplo clique = a zero",
   filterTitle: "Filtro DJ: para a esquerda = passa-baixo, para a direita = passa-alto · clique direito ou duplo clique = OFF",
   crossfader: "Crossfader",
+  resetHint: "clique direito = voltar à posição inicial",
+  volumeTitle: "Volume do deck {side}",
+  crossfaderTitle: "Crossfader: mistura entre o deck A e o B",
+  masterVolTitle: "Volume geral de saída",
+  seekTitle: "Posição na faixa",
+  pitchFaderTitle: "Fader de pitch: muda o tempo",
+  cueVolTitle: "Volume da pré-escuta",
 
   cueBus: "🎧 Cue",
   cueBusTitle:

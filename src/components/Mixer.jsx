@@ -197,7 +197,9 @@ export default function Mixer({
               onChange={(e) => onVolChange("A", Number(e.target.value))}
               ticks={11}
               accent="#22d3ee"
-              ariaLabel="Volumen A"
+              resetValue={1}
+              title={t("volumeTitle", { side: "A" })}
+              ariaLabel={t("volumeTitle", { side: "A" })}
             />
             <VUBar engine={engine} side={"A"} />
           </div>
@@ -214,7 +216,9 @@ export default function Mixer({
               onChange={(e) => onVolChange("B", Number(e.target.value))}
               ticks={11}
               accent="#e879f9"
-              ariaLabel="Volumen B"
+              resetValue={1}
+              title={t("volumeTitle", { side: "B" })}
+              ariaLabel={t("volumeTitle", { side: "B" })}
             />
           </div>
           <EqColumn
@@ -246,7 +250,9 @@ export default function Mixer({
           fill="center"
           ticks={5}
           thickness={26}
-          ariaLabel="Crossfader"
+          resetValue={0.5}
+          title={t("crossfaderTitle")}
+          ariaLabel={t("crossfader")}
         />
       </div>
     </div>

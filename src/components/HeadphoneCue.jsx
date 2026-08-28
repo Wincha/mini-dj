@@ -79,6 +79,8 @@ export default function HeadphoneCue({ engine, cueDeviceId }) {
           ticks={11}
           thickness={18}
           accent="#fbbf24"
+          resetValue={1}
+          title={t("cueVolTitle")}
           ariaLabel={t("vol")}
         />
       </div>

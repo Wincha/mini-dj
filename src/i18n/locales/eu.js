@@ -81,6 +81,13 @@ export default {
   gainTitle: "Kanalaren irabazia · eskuin-klika edo klik bikoitza = zerora",
   filterTitle: "DJ iragazkia: ezkerrera = behe-iragazkia, eskuinera = goi-iragazkia · eskuin-klika edo klik bikoitza = OFF",
   crossfader: "Crossfader",
+  resetHint: "eskuin-klika = hasierako posiziora itzuli",
+  volumeTitle: "{side} deck-aren bolumena",
+  crossfaderTitle: "Crossfader: A eta B decken arteko nahasketa",
+  masterVolTitle: "Irteerako bolumen orokorra",
+  seekTitle: "Pistako posizioa",
+  pitchFaderTitle: "Pitch faderra: tempoa aldatzen du",
+  cueVolTitle: "Aurre-entzutearen bolumena",
 
   cueBus: "🎧 Cue",
   cueBusTitle:
