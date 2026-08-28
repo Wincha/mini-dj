@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef } from "react";
 import { HOT_CUE_COLORS } from "../lib/constants";
+import { createSmoothTime } from "../lib/smoothTime";
 
 function WaveformCanvas({
   waveData,
@@ -20,6 +21,8 @@ function WaveformCanvas({
   onWheelZoom,
 }) {
   const canvasRef = useRef(null);
+  const smoothTimeRef = useRef(null);
+  if (!smoothTimeRef.current) smoothTimeRef.current = createSmoothTime();
 
   // Zoom con la rueda del ratón (listener nativo: React registra wheel como
   // pasivo y no dejaría hacer preventDefault del scroll de la página)
@@ -81,7 +84,7 @@ function WaveformCanvas({
       // Datos del audio (para follow y cursor)
       const audioEl = audioRef?.current || null;
       const dur = audioEl?.duration || 0;
-      const cur = audioEl?.currentTime || 0;
+      const cur = smoothTimeRef.current(audioEl); // playhead interpolado
       const curFrac = dur > 0 ? cur / dur : 0; // 0..1
 
       // Ventana visible (en "muestras")
@@ -118,18 +121,16 @@ function WaveformCanvas({
       ctx.fillStyle = "#171717";
       ctx.fillRect(0, 0, w, h);
 
-      // Waveform visible
+      // Waveform visible: un único path en vez de un fillRect por píxel
       ctx.fillStyle = "#22c55e";
       const samplesPerPixel = visible / w;
-
+      const wave = new Path2D();
       for (let x = 0; x < w; x++) {
-        const idxFloat = start + x * samplesPerPixel;
-        const idx = Math.floor(idxFloat);
+        const idx = Math.floor(start + x * samplesPerPixel);
         const v = waveData[idx] || 0;
-        const y = (1 - v) * h * 0.5;
-        const hh = v * h;
-        ctx.fillRect(x, y, 1, hh);
+        wave.rect(x, (1 - v) * h * 0.5, 1, v * h);
       }
+      ctx.fill(wave);
 
       // Beats
       if (beats && beats.length && dur > 0) {

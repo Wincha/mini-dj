@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef } from "react";
 import { useI18n } from "../i18n/context";
+import { createSmoothTime } from "../lib/smoothTime";
 
 // Panel de beat-match: las dos ondas alrededor de su playhead (línea central).
 // Con los BPM igualados y los beats alineados, las marcas rojas coinciden.
@@ -8,6 +9,10 @@ const WINDOW_SECONDS = 4;
 function BeatMatchPanel({ analysis, audioElsRef }) {
   const { t } = useI18n();
   const canvasRef = useRef(null);
+  const smoothRef = useRef(null);
+  if (!smoothRef.current) {
+    smoothRef.current = { A: createSmoothTime(), B: createSmoothTime() };
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -29,21 +34,23 @@ function BeatMatchPanel({ analysis, audioElsRef }) {
         return;
       }
 
-      const cur = el.currentTime || 0;
+      const cur = smoothRef.current[side](el); // playhead interpolado
       const tStart = cur - WINDOW_SECONDS / 2;
       const tEnd = cur + WINDOW_SECONDS / 2;
       const wave = data.waveData;
       const len = wave.length;
 
       ctx.fillStyle = laneColors[side];
+      const path = new Path2D();
       for (let x = 0; x < w; x++) {
         const t = tStart + ((tEnd - tStart) * x) / w;
         if (t < 0 || t > dur) continue;
         const idx = Math.min(len - 1, Math.floor((t / dur) * len));
         const v = wave[idx] || 0;
         const hh = Math.max(1, v * laneH);
-        ctx.fillRect(x, y0 + (laneH - hh) / 2, 1, hh);
+        path.rect(x, y0 + (laneH - hh) / 2, 1, hh);
       }
+      ctx.fill(path);
 
       // Beats de la ventana
       if (data.beats?.length) {
