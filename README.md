@@ -43,10 +43,70 @@ Two‑deck DJ app built with React, Vite and Tailwind — everything runs locall
 3) Load audio files into Deck A/B and start mixing.
 
 ## Scripts
+### Web
 - `npm run dev` – start Vite dev server with HMR.
 - `npm run build` – production build.
 - `npm run preview` – preview the production build locally.
 - `npm run lint` – run ESLint.
+
+### Desktop (Electron)
+- `npm run desktop:dev` – Vite dev server + Electron pointed at it (HMR, DevTools open).
+- `npm run desktop:preview` – build and run Electron against `dist/`, the exact production code path.
+- `npm run desktop:dir` – build an unpacked app in `release/` (no installer).
+- `npm run desktop:build` – build installers for the current platform.
+- `npm run dist:win` / `dist:linux` / `dist:mac` – build for one platform.
+
+## Desktop app (Electron)
+
+The desktop build is a thin wrapper around the same web bundle — the audio engine,
+the UI and the storage code are unchanged.
+
+Targets: **Windows** NSIS installer + portable `.exe`, **Linux** AppImage + `.deb`,
+**macOS** `.dmg` (x64 and arm64). Configuration lives in `electron-builder.yml`;
+output goes to `release/`.
+
+How it is wired:
+- `electron/main.cjs` – main process. `contextIsolation: true`, `nodeIntegration: false`,
+  `sandbox: true`. In development it loads the Vite dev server; in production it serves
+  `dist/` over a custom `app://` scheme registered as *standard* and *secure* (not `file://`,
+  which is an opaque origin and makes IndexedDB/localStorage unreliable and breaks secure-context
+  APIs like `getUserMedia` and `setSinkId`). A CSP is sent as a response header on that scheme.
+- `electron/preload.cjs` – minimal bridge; exposes only `window.miniDJDesktop`
+  (`isDesktop`, `platform`, versions). No Node API reaches the page.
+- Media permission is granted in the session. Without it `enumerateDevices()` returns
+  outputs with empty labels and the ⚙ Config device pickers come up blank.
+- `backgroundThrottling` is disabled so waveforms and background analysis keep running
+  when the window loses focus.
+- Downloads (the recorded `.webm`, the tracklist CSV) open the native save dialog,
+  defaulting to the system Downloads folder.
+- Track library (IndexedDB) and settings/language (localStorage) persist between launches.
+
+### Releases
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds on Windows, Linux and
+macOS runners and uploads the binaries to a **draft** GitHub release. Review it and publish
+manually. No secrets are needed beyond the default `GITHUB_TOKEN`.
+
+```
+npm version patch   # or minor / major
+git push --follow-tags
+```
+
+### Auto-update
+Not enabled. `electron-builder.yml` already has the GitHub `publish` block that
+`electron-updater` needs, so wiring it up later is adding the dependency and the check call —
+nothing here has to change.
+
+### Desktop limitations
+- **Windows**: the installer and the app are not code-signed. SmartScreen will show
+  "Windows protected your PC" on first run; the user has to click *More info → Run anyway*.
+  Removing that warning requires a paid code-signing certificate.
+- **macOS**: not signed and not notarized (no Apple Developer account). The first launch is
+  blocked by Gatekeeper; the user has to right-click the app → *Open* → *Open*. A plain
+  double-click will only offer to move it to the Bin. On some macOS versions the app may also
+  need `xattr -dr com.apple.quarantine "/Applications/Mini DJ.app"`.
+- **Linux**: the AppImage needs FUSE 2 (or `--appimage-extract-and-run`). The `.deb` declares
+  the usual Chromium runtime dependencies.
+- Only x64 is built for Windows and Linux; macOS gets both x64 and arm64.
 
 ## How to use
 - Add songs to the crate (or load files directly on a deck); waveform, loudness and BPM analysis run locally.
@@ -63,8 +123,12 @@ Two‑deck DJ app built with React, Vite and Tailwind — everything runs locall
 - `src/i18n/` – language provider, detection and the 11 locale dictionaries.
 - `src/lib/` – IndexedDB track store, shared constants.
 - `src/components/*` – decks, mixer, meters, track list, config dialog, waveform, the reusable `Fader`, knobs.
+- `electron/` – desktop wrapper (main process, preload).
+- `scripts/electron-dev.mjs` – starts Vite and launches Electron against the resolved URL.
+- `electron-builder.yml` – packaging targets and installer options.
+- `build/` – application icons.
 
 ## Notes / limitations
-- Browser-only; uses `AudioContext` and `createObjectURL`, so tracks stay local.
+- Runs in the browser or as an Electron desktop app; uses `AudioContext` and `createObjectURL`, so tracks stay local either way.
 - Auto BPM detection can miss on unusual material; the grid TAP is the fallback (and fixes the grid anchor too).
 - PFL and per‑deck outputs are only useful with more than one audio device (e.g. USB headphones): pick outputs in ⚙ Config; the master keeps playing on its own output.

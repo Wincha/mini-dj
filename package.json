@@ -8,7 +8,14 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "desktop:dev": "node scripts/electron-dev.mjs",
+    "desktop:preview": "npm run build && electron .",
+    "desktop:build": "npm run build && electron-builder",
+    "desktop:dir": "npm run build && electron-builder --dir",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:mac": "npm run build && electron-builder --mac"
   },
   "dependencies": {
     "react": "^19.1.1",
@@ -21,11 +28,19 @@
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.4",
     "baseline-browser-mapping": "^2.11.19",
+    "electron": "^38.8.6",
+    "electron-builder": "^26.15.3",
     "eslint": "^9.36.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.22",
     "globals": "^16.4.0",
     "tailwindcss": "^4.1.17",
     "vite": "^7.1.7"
+  },
+  "main": "electron/main.cjs",
+  "description": "Mesa de DJ de dos decks en el navegador y en escritorio",
+  "author": {
+    "name": "Wincha",
+    "email": "wincha.gm@gmail.com"
   }
 }

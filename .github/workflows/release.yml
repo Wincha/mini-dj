@@ -1,0 +1,54 @@
+name: Release
+
+# Se dispara al empujar un tag de versión (v1.2.3). Compila en los tres
+# sistemas y sube los binarios a un release en borrador de GitHub.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux (AppImage + deb)
+            args: --linux
+          - os: windows-latest
+            name: Windows (NSIS + portable)
+            args: --win
+          - os: macos-latest
+            name: macOS (dmg)
+            args: --mac
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build web bundle
+        run: npm run build
+
+      - name: Package and publish
+        run: npx --no-install electron-builder ${{ matrix.args }} --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Sin cuenta de Apple Developer: no se firma ni se notariza
+          CSC_IDENTITY_AUTO_DISCOVERY: false

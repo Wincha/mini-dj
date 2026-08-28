@@ -1,0 +1,91 @@
+appId: com.wincha.minidj
+productName: Mini DJ
+copyright: Copyright © Wincha
+
+directories:
+  output: release
+  buildResources: build
+
+# Solo entra en el paquete lo necesario: el bundle web, el wrapper y el manifiesto
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+
+asar: true
+# No hay dependencias nativas: no hace falta recompilar nada
+npmRebuild: false
+
+# Publicación en GitHub Releases (lo usa el workflow de Actions).
+# electron-updater no está activado: ver README ("Auto-update").
+publish:
+  - provider: github
+    owner: Wincha
+    repo: mini-dj
+    releaseType: draft
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  # Sin certificado: el instalador no va firmado (aviso de SmartScreen)
+  signAndEditExecutable: true
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Mini DJ
+  artifactName: ${productName}-${version}-win-x64-setup.${ext}
+
+portable:
+  artifactName: ${productName}-${version}-win-x64-portable.${ext}
+
+linux:
+  icon: build/icon.png
+  category: AudioVideo
+  # Asocia la ventana con su entrada .desktop (icono correcto en la barra)
+  syncDesktopName: true
+  synopsis: Mesa de DJ de dos decks
+  description: Mini DJ — aplicación de DJ de dos decks (Web Audio) empaquetada para escritorio.
+  desktop:
+    entry:
+      Name: Mini DJ
+      Categories: AudioVideo;Audio;Player;
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+
+deb:
+  # Chromium necesita estas librerías del sistema
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libasound2
+
+mac:
+  icon: build/icon.png
+  category: public.app-category.music
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  # Sin cuenta de Apple Developer: ni firma ni notarización
+  identity: null
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+
+dmg:
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
