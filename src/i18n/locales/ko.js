@@ -1,5 +1,5 @@
 export default {
-  subtitle: "by Dj Wincha (Under construction)",
+  subtitle: "Dj Wincha 제작 (제작 중)",
   rec: "● 녹음",
   recTitle: "마스터 믹스를 녹음합니다. 정지하면 .webm으로 다운로드됩니다",
   master: "마스터",

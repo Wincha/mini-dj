@@ -1,6 +1,6 @@
 export default {
   // Cabecera
-  subtitle: "by Dj Wincha (Under construction)",
+  subtitle: "por Dj Wincha (en construcción)",
   rec: "● REC",
   recTitle: "Graba el mix master; al parar se descarga como .webm",
   master: "Master",
