@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
+import { useI18n } from "../i18n/context";
 
 // Panel de beat-match: las dos ondas alrededor de su playhead (línea central).
 // Con los BPM igualados y los beats alineados, las marcas rojas coinciden.
 const WINDOW_SECONDS = 4;
 
 export default function BeatMatchPanel({ analysis, audioElsRef }) {
+  const { t } = useI18n();
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -23,7 +25,7 @@ export default function BeatMatchPanel({ analysis, audioElsRef }) {
       if (!data?.waveData?.length || !dur) {
         ctx.fillStyle = "rgba(163,163,163,0.35)";
         ctx.font = "10px sans-serif";
-        ctx.fillText(`Deck ${side} — sin pista`, 6, y0 + laneH / 2 + 3);
+        ctx.fillText(t("deckNoTrack", { side }), 6, y0 + laneH / 2 + 3);
         return;
       }
 
@@ -90,12 +92,12 @@ export default function BeatMatchPanel({ analysis, audioElsRef }) {
 
     frameId = requestAnimationFrame(drawFrame);
     return () => cancelAnimationFrame(frameId);
-  }, [analysis, audioElsRef]);
+  }, [analysis, audioElsRef, t]);
 
   return (
     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-3 shadow-xl">
-      <div className="text-xs text-neutral-400 mb-1" title="Con el SYNC puesto, alinea las marcas rojas de beats con nudge / arrastrando la onda">
-        Beat match
+      <div className="text-xs text-neutral-400 mb-1" title={t("beatMatchTitle")}>
+        {t("beatMatch")}
       </div>
       <canvas ref={canvasRef} className="w-full h-20 bg-neutral-800 rounded-lg" />
     </div>

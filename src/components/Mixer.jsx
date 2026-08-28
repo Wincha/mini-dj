@@ -3,10 +3,12 @@ import HorizontalSlider from "./HorizontalSlider";
 import VerticalSlider from "./VerticalSlider";
 import VUBar from "./VUBar";
 import Knob from "./Knob";
+import { useI18n } from "../i18n/context";
 
 const KILL_DB = -40; // atenuación de banda en modo kill
 
 function EqColumn({
+  t,
   side,
   eq,
   setEq,
@@ -17,16 +19,17 @@ function EqColumn({
   autoGainEnabled,
   toggleAutoGain,
 }) {
-  const band = (label, key) => (
+  const band = (labelKey, key) => (
     <Knob
       size={44}
-      label={label}
+      label={t(labelKey)}
       min={-12}
       max={+12}
       step={0.5}
       value={eq[key]}
       onChange={(e) => setEq(side, { ...eq, [key]: Number(e.target.value) })}
       killed={kills[key]}
+      killLabel={t("kill")}
       onContextMenu={(e) => {
         e.preventDefault();
         toggleKill(side, key);
@@ -37,12 +40,12 @@ function EqColumn({
 
   return (
     <div
-      className="flex flex-col gap-2"
-      title="EQ: click derecho = kill de banda · doble click = a cero"
+      className="flex flex-col gap-2 items-center shrink-0"
+      title={t("eqTitle")}
     >
       <Knob
         size={44}
-        label="Gain"
+        label={t("gain")}
         min={-24}
         max={+12}
         step={0.5}
@@ -52,20 +55,20 @@ function EqColumn({
       />
       <button
         onClick={() => toggleAutoGain(side)}
-        className={`px-2 py-1 rounded text-xs border ${
+        className={`px-2 py-1 rounded text-xs border w-16 text-center ${
           autoGainEnabled
             ? "bg-emerald-500 text-black border-emerald-400"
             : "bg-neutral-800 text-neutral-200 border-neutral-700"
         }`}
       >
-        Auto
+        {t("auto")}
       </button>
-      {band("High", "high")}
-      {band("Mid", "mid")}
-      {band("Low", "low")}
+      {band("high", "high")}
+      {band("mid", "mid")}
+      {band("low", "low")}
       <Knob
         size={44}
-        label="Filter"
+        label={t("filter")}
         min={-1}
         max={1}
         step={0.01}
@@ -74,7 +77,7 @@ function EqColumn({
         resetValue={0}
         format={(v) =>
           Math.abs(v) < 0.05
-            ? "OFF"
+            ? t("filterOff")
             : (v < 0 ? "LPF " : "HPF ") + Math.round(Math.abs(v) * 100) + "%"
         }
       />
@@ -90,6 +93,7 @@ export default function Mixer({
   onVolChange,
   deckAutoGain,
 }) {
+  const { t } = useI18n();
   const [cross, setCross] = useState(0.5);
   const [autoGainEnabled, setAutoGainEnabled] = useState({
     A: false,
@@ -164,6 +168,7 @@ export default function Mixer({
       <div className="flex flex-row flex-wrap gap-4 justify-between mb-4">
         <div className="flex flex-row items-center gap-3 sm:gap-4">
           <EqColumn
+            t={t}
             side="A"
             eq={eq.A}
             setEq={setEq}
@@ -199,6 +204,7 @@ export default function Mixer({
             />
           </div>
           <EqColumn
+            t={t}
             side="B"
             eq={eq.B}
             setEq={setEq}
@@ -214,7 +220,7 @@ export default function Mixer({
       <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 shadow-xl">
         <div className="flex items-center justify-between text-xs text-neutral-400 mb-2">
           <span>A</span>
-          <span>Crossfader</span>
+          <span>{t("crossfader")}</span>
           <span>B</span>
         </div>
         <HorizontalSlider

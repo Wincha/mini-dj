@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import HorizontalSlider from "./HorizontalSlider";
 import VUBar from "./VUBar";
 import BeatMatchPanel from "./BeatMatchPanel";
+import LanguageSelector from "./LanguageSelector";
+import { useI18n } from "../i18n/context";
 
 function formatRecTime(s) {
   const m = Math.floor(s / 60);
@@ -21,6 +23,7 @@ export default function CentralMeters({
   setMasterBpm,
   onOpenConfig,
 }) {
+  const { t } = useI18n();
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
   const recorderRef = useRef(null);
@@ -75,7 +78,7 @@ export default function CentralMeters({
   return (
     <div className="flex flex-wrap items-center rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 shadow-xl gap-4 sm:gap-6">
       {/* Título + REC */}
-      <header className="shrink-0">
+      <header className="shrink-0 self-start flex flex-col gap-1">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">
             Mini DJ Mixer
@@ -83,20 +86,29 @@ export default function CentralMeters({
           {recSupported && (
             <button
               onClick={toggleRecording}
-              className={`px-3 py-1.5 rounded-xl text-sm font-semibold border ${
+              className={`px-3 py-1.5 rounded-xl text-sm font-semibold border grid place-items-center tabular-nums ${
                 recording
                   ? "bg-red-500 text-white border-red-400 animate-pulse"
                   : "bg-neutral-800 text-neutral-200 border-neutral-700"
               }`}
-              title="Graba el mix master; al parar se descarga como .webm"
+              title={t("recTitle")}
             >
-              {recording ? `■ ${formatRecTime(recSeconds)}` : "● REC"}
+              <span className="col-start-1 row-start-1 invisible h-0" aria-hidden>
+                {t("rec")}
+              </span>
+              <span className="col-start-1 row-start-1 invisible h-0" aria-hidden>
+                ■ 00:00
+              </span>
+              <span className="col-start-1 row-start-1 whitespace-nowrap">
+                {recording ? `■ ${formatRecTime(recSeconds)}` : t("rec")}
+              </span>
             </button>
           )}
         </div>
-        <p className="text-sm text-neutral-400">
-          by Dj Wincha (Under construction)
-        </p>
+        <p className="text-sm text-neutral-400">{t("subtitle")}</p>
+        <div className="mt-1">
+          <LanguageSelector />
+        </div>
       </header>
 
       {/* Beat match centrado y bien visible */}
@@ -107,11 +119,11 @@ export default function CentralMeters({
       {/* Master compacto + Master Sync + Config */}
       <div className="flex flex-col gap-2 w-full sm:w-64 shrink-0">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-neutral-400">Master</span>
+          <span className="text-xs text-neutral-400">{t("master")}</span>
           <button
             onClick={onOpenConfig}
             className="px-2 py-0.5 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-300 hover:bg-neutral-700"
-            title="Configuración: salidas de audio y análisis"
+            title={t("configTitle")}
           >
             ⚙
           </button>
@@ -129,14 +141,14 @@ export default function CentralMeters({
         <div className="flex items-center gap-2">
           <button
             onClick={onToggleMasterSync}
-            className={`px-2 py-1 rounded-lg text-xs font-semibold border ${
+            className={`px-2 py-1 rounded-lg text-xs font-semibold border text-center whitespace-nowrap ${
               masterSyncOn
                 ? "bg-emerald-500 text-black border-emerald-400"
                 : "bg-neutral-800 text-neutral-300 border-neutral-700"
             }`}
-            title="Master sync: los decks con SYNC siguen este BPM en vez del otro deck"
+            title={t("masterSyncTitle")}
           >
-            MASTER SYNC
+            {t("masterSync")}
           </button>
           <div
             className={`flex items-center gap-1 ${
@@ -159,7 +171,7 @@ export default function CentralMeters({
                 if (Number.isFinite(v)) setMasterBpm(Math.min(220, Math.max(40, v)));
               }}
               className="w-14 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-center text-xs text-neutral-200"
-              title="BPM del master sync"
+              title={t("masterBpmTitle")}
             />
             <button
               onClick={() => setMasterBpm(Math.min(220, masterBpm + 1))}
@@ -167,7 +179,7 @@ export default function CentralMeters({
             >
               +
             </button>
-            <span className="text-[10px] text-neutral-500">BPM</span>
+            <span className="text-[10px] text-neutral-500">{t("bpm")}</span>
           </div>
         </div>
       </div>

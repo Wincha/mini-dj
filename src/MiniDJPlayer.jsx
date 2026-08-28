@@ -12,11 +12,13 @@ import Mixer from "./components/Mixer";
 import TrackList from "./components/TrackList";
 import HeadphoneCue from "./components/HeadphoneCue";
 import ConfigDialog from "./components/ConfigDialog";
+import { useI18n } from "./i18n/context";
 
 const PITCH_RANGES = [8, 16, 50];
 const CONFIG_KEY = "mini-dj-config";
 
 export default function MiniDJMixer() {
+  const { t } = useI18n();
   const engine = useMemo(() => new AudioEngine(), []);
 
   const [master, setMaster] = useState(1);
@@ -575,9 +577,7 @@ export default function MiniDJMixer() {
 
         {/* Atajos */}
         <p className="text-[10px] text-neutral-600 text-center">
-          Teclado (deck activo: Q=A, P=B o click en el deck) — Espacio:
-          play/pausa · C: cue/stop · 1-3: hot cues · I/O: loop in/out · L:
-          loop on/off · ←/→: nudge
+          {t("shortcuts")}
         </p>
       </div>
 

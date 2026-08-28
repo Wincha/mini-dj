@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { useI18n } from "../i18n/context";
 
 function formatSize(bytes) {
   if (!Number.isFinite(bytes)) return "";
@@ -20,6 +21,7 @@ export default function TrackList({
   onLoadToDeck,
   onRemoveTrack,
 }) {
+  const { t } = useI18n();
   const inputRef = useRef(null);
 
   // Búsqueda y ordenación
@@ -30,7 +32,7 @@ export default function TrackList({
   const visibleTracks = useMemo(() => {
     let list = tracks;
     const q = query.trim().toLowerCase();
-    if (q) list = list.filter((t) => t.name.toLowerCase().includes(q));
+    if (q) list = list.filter((tr) => tr.name.toLowerCase().includes(q));
     if (sortBy !== "added") {
       list = [...list].sort((a, b) => {
         let r = 0;
@@ -61,14 +63,20 @@ export default function TrackList({
   };
 
   const exportList = () => {
-    const header = "Nombre;Duración;BPM;Tamaño;Pinchada en";
-    const rows = tracks.map((t) => {
-      const played = ["A", "B"].filter((s) => t.playedOn?.[s]).join("+");
+    const header = [
+      t("csvName"),
+      t("csvDuration"),
+      t("csvBpm"),
+      t("csvSize"),
+      t("csvPlayedOn"),
+    ].join(";");
+    const rows = tracks.map((tr) => {
+      const played = ["A", "B"].filter((s) => tr.playedOn?.[s]).join("+");
       return [
-        t.name,
-        formatDuration(t.duration),
-        t.bpm ?? "",
-        formatSize(t.size),
+        tr.name,
+        formatDuration(tr.duration),
+        tr.bpm ?? "",
+        formatSize(tr.size),
         played,
       ].join(";");
     });
@@ -98,31 +106,31 @@ export default function TrackList({
   return (
     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 sm:p-5 shadow-xl">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-        <h2 className="text-lg font-semibold tracking-tight">Canciones</h2>
+        <h2 className="text-lg font-semibold tracking-tight">{t("songs")}</h2>
         {tracks.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar…"
+              placeholder={t("search")}
               className="w-40 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-500"
             />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
               className="bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1.5 text-sm text-neutral-300"
-              title="Ordenar por"
+              title={t("sortByTitle")}
             >
-              <option value="added">Añadido</option>
-              <option value="name">Nombre</option>
-              <option value="bpm">BPM</option>
-              <option value="duration">Duración</option>
+              <option value="added">{t("sortAdded")}</option>
+              <option value="name">{t("sortName")}</option>
+              <option value="bpm">{t("sortBpm")}</option>
+              <option value="duration">{t("sortDuration")}</option>
             </select>
             <button
               onClick={() => setSortDir((d) => -d)}
               className="px-2 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-sm text-neutral-300 hover:bg-neutral-700"
-              title="Invertir orden"
+              title={t("reverseTitle")}
             >
               {sortDir === 1 ? "↑" : "↓"}
             </button>
@@ -133,16 +141,16 @@ export default function TrackList({
             <button
               onClick={exportList}
               className="px-3 py-2 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-300 text-sm hover:bg-neutral-700"
-              title="Exporta la lista como CSV (nombre, duración, BPM, dónde se pinchó)"
+              title={t("exportTitle")}
             >
-              ⬇ Exportar
+              {t("export")}
             </button>
           )}
           <button
             onClick={() => inputRef.current?.click()}
             className="px-4 py-2 rounded-xl bg-neutral-200 text-neutral-900 text-sm font-semibold hover:bg-white/90"
           >
-            + Añadir canciones
+            {t("addSongs")}
           </button>
         </div>
         <input
@@ -157,11 +165,11 @@ export default function TrackList({
 
       {tracks.length === 0 ? (
         <p className="text-sm text-neutral-500">
-          Añade canciones para cargarlas en los decks A o B.
+          {t("emptyList")}
         </p>
       ) : visibleTracks.length === 0 ? (
         <p className="text-sm text-neutral-500">
-          Ninguna canción coincide con "{query}".
+          {t("noMatch", { query })}
         </p>
       ) : (
         <ul className="divide-y divide-neutral-800 max-h-64 overflow-y-auto">
@@ -181,8 +189,8 @@ export default function TrackList({
                       className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${badgeClasses[side][state]}`}
                       title={
                         state === "current"
-                          ? `Cargada ahora en el deck ${side}`
-                          : `Ya pinchada en el deck ${side}`
+                          ? t("badgeCurrentTitle", { side })
+                          : t("badgePlayedTitle", { side })
                       }
                     >
                       {side}
@@ -200,36 +208,36 @@ export default function TrackList({
               <span className="w-12 text-right text-xs text-neutral-500 tabular-nums shrink-0">
                 {formatDuration(track.duration)}
               </span>
-              <span className="w-20 shrink-0 text-center">
+              <span className="w-24 shrink-0 text-center">
                 {track.bpm != null ? (
-                  <span className="inline-block w-full px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold tabular-nums">
-                    {track.bpm} BPM
+                  <span className="inline-block w-full px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold tabular-nums truncate">
+                    {track.bpm} {t("bpm")}
                   </span>
                 ) : track.analyzeFailed ? (
-                  <span className="text-[10px] text-neutral-600">BPM ?</span>
+                  <span className="text-[10px] text-neutral-600">{t("bpmUnknown")}</span>
                 ) : (
                   <span className="text-[10px] text-neutral-500 animate-pulse">
-                    pendiente…
+                    {t("pendingAnalysis")}
                   </span>
                 )}
               </span>
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => onLoadToDeck("A", track)}
-                  className="px-3 py-1 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/30"
+                  className="px-3 py-1 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/30 whitespace-nowrap"
                 >
-                  → A
+                  {t("loadToDeck", { side: "A" })}
                 </button>
                 <button
                   onClick={() => onLoadToDeck("B", track)}
-                  className="px-3 py-1 rounded-lg bg-fuchsia-500/20 border border-fuchsia-500/40 text-fuchsia-300 text-xs font-semibold hover:bg-fuchsia-500/30"
+                  className="px-3 py-1 rounded-lg bg-fuchsia-500/20 border border-fuchsia-500/40 text-fuchsia-300 text-xs font-semibold hover:bg-fuchsia-500/30 whitespace-nowrap"
                 >
-                  → B
+                  {t("loadToDeck", { side: "B" })}
                 </button>
                 <button
                   onClick={() => onRemoveTrack(track.id)}
                   className="px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-400 text-xs hover:text-red-400 hover:border-red-500/50"
-                  title="Quitar de la lista"
+                  title={t("removeTitle")}
                 >
                   ✕
                 </button>

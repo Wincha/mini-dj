@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import HorizontalSlider from "./HorizontalSlider";
+import { useI18n } from "../i18n/context";
 
 // PFL / pre-escucha: envía el deck (pre-fader, post-EQ) a la salida elegida
 // en Config (⚙). Solo tiene sentido con dos dispositivos: el master sigue
 // saliendo por su propia salida.
 export default function HeadphoneCue({ engine, cueDeviceId }) {
+  const { t } = useI18n();
   const [pfl, setPfl] = useState({ A: false, B: false });
   const [hpVol, setHpVol] = useState(1);
   const audioRef = useRef(null);
@@ -45,29 +47,29 @@ export default function HeadphoneCue({ engine, cueDeviceId }) {
   return (
     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 px-4 py-2 shadow-xl flex flex-wrap items-center gap-x-4 gap-y-2">
       <span
-        className="text-xs text-neutral-400 shrink-0"
-        title="Pre-escucha (pre-fader). Elige la salida de auriculares en Config ⚙"
+        className="text-xs text-neutral-400 shrink-0 whitespace-nowrap"
+        title={t("cueBusTitle")}
       >
-        🎧 Cue
+        {t("cueBus")}
       </span>
       <div className="flex items-center gap-1 shrink-0">
         {["A", "B"].map((side) => (
           <button
             key={side}
             onClick={() => togglePfl(side)}
-            className={`px-2 py-1 rounded-lg text-xs font-semibold border ${
+            className={`px-2 py-1 rounded-lg text-xs font-semibold border whitespace-nowrap ${
               pfl[side]
                 ? "bg-amber-400 text-black border-amber-300"
                 : "bg-neutral-800 text-neutral-300 border-neutral-700"
             }`}
-            title={`Pre-escuchar deck ${side} por los auriculares`}
+            title={t("pflTitle", { side })}
           >
             PFL {side}
           </button>
         ))}
       </div>
       <div className="flex items-center gap-2 flex-1 min-w-40">
-        <span className="text-[10px] text-neutral-500 shrink-0">Vol</span>
+        <span className="text-[10px] text-neutral-500 shrink-0">{t("vol")}</span>
         <HorizontalSlider
           min={0}
           max={1}

@@ -9,6 +9,7 @@ import VerticalSlider from "./VerticalSlider";
 import HorizontalSlider from "./HorizontalSlider";
 import WaveformCanvas from "./WaveformCanvas";
 import { HOT_CUE_COLORS } from "../lib/constants";
+import { useI18n } from "../i18n/context";
 import { analyzeTrackLoudness, BeatDetect } from "../audio/utils";
 
 export default function Deck({
@@ -35,10 +36,12 @@ export default function Deck({
   onActivate,
   ref,
 }) {
+  const { t } = useI18n();
   const pitchRafRef = useRef(null);
   const audioRef = useRef(null);
   const beatDetectorRef = useRef(null);
   const bpmDisplayRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // === Forma de onda / análisis ===
   const [waveData, setWaveData] = useState(null);
@@ -90,7 +93,7 @@ export default function Deck({
   };
 
   const getFilenameWithoutExtension = () => {
-    return fileName?.substring(0, fileName?.lastIndexOf(".")) || "Sin Archivo";
+    return fileName?.substring(0, fileName?.lastIndexOf(".")) || t("noFile");
   };
 
   const calcDuration = (time) => {
@@ -179,13 +182,13 @@ export default function Deck({
 
   // Auto-cue: solo si el usuario no ha fijado un cue manual.
   // Si el deck está parado, colocamos también la pista en el cue.
-  const applyAutoCue = (t) => {
+  const applyAutoCue = (time) => {
     if (cueManualRef.current) return;
-    setCuePoint(t);
+    setCuePoint(time);
     const el = audioRef.current;
     if (el && el.paused) {
-      el.currentTime = t;
-      setCurrent(t);
+      el.currentTime = time;
+      setCurrent(time);
     }
   };
 
@@ -222,8 +225,8 @@ export default function Deck({
           ? Math.max(0, info.offset)
           : 0;
         const beatsArr = [];
-        for (let t = beatStart; t < trackDuration; t += beatInterval) {
-          beatsArr.push(t);
+        for (let time = beatStart; time < trackDuration; time += beatInterval) {
+          beatsArr.push(time);
         }
         setBeats(beatsArr);
         if (typeof onAnalysis === "function") {
@@ -268,7 +271,7 @@ export default function Deck({
     // primer beat >= 0 en fase con el ancla
     const start = anchor - Math.floor(anchor / interval) * interval;
     const arr = [];
-    for (let t = start; t < dur; t += interval) arr.push(t);
+    for (let time = start; time < dur; time += interval) arr.push(time);
     setBeats(arr);
     if (typeof onAnalysis === "function") onAnalysis(side, { beats: arr });
   };
@@ -405,6 +408,7 @@ export default function Deck({
     const f = e.target.files?.[0];
     if (!f) return;
     loadTrack(f);
+    e.target.value = ""; // permite volver a elegir el mismo archivo
   };
 
   const onLoaded = () => {
@@ -444,30 +448,30 @@ export default function Deck({
   };
 
   // Posicionar la pista en pausa fija el CUE en ese punto
-  const setCueIfPaused = (t) => {
+  const setCueIfPaused = (time) => {
     const el = audioRef.current;
     if (!el || !el.paused) return;
     cueManualRef.current = true;
-    setCuePoint(t);
+    setCuePoint(time);
   };
 
   const seek = (v) => {
     const el = audioRef.current;
     if (!el) return;
-    const t = Number(v);
-    el.currentTime = t;
-    setCurrent(t);
-    setCueIfPaused(t);
+    const time = Number(v);
+    el.currentTime = time;
+    setCurrent(time);
+    setCueIfPaused(time);
   };
 
   // Arrastre de la onda en pausa: empujar la pista hasta la línea de reproducción
-  const onDragSeek = (t) => {
+  const onDragSeek = (time) => {
     const el = audioRef.current;
     if (!el) return;
-    el.currentTime = t;
-    setCurrent(t);
+    el.currentTime = time;
+    setCurrent(time);
     setFollow(true);
-    setCueIfPaused(t);
+    setCueIfPaused(time);
   };
 
   // Arrastre de la onda en play: nudge temporal tipo pitch bend
@@ -480,12 +484,12 @@ export default function Deck({
 
   // === Quantize: imanta cues/loops/saltos al beat más cercano ===
   const [quantize, setQuantize] = useState(true);
-  const snapToGrid = (t) => {
-    if (!quantize || !beats.length) return t;
-    let best = t;
+  const snapToGrid = (time) => {
+    if (!quantize || !beats.length) return time;
+    let best = time;
     let bestD = Infinity;
     for (const b of beats) {
-      const d = Math.abs(b - t);
+      const d = Math.abs(b - time);
       if (d < bestD) {
         bestD = d;
         best = b;
@@ -502,24 +506,24 @@ export default function Deck({
     const dt = dir * jumpBeats * (60 / bpm);
     const dur = duration || el.duration || 0;
     const base = snapToGrid(el.currentTime || 0);
-    const t = Math.max(0, Math.min(Math.max(0, dur - 0.01), base + dt));
-    el.currentTime = t;
-    setCurrent(t);
-    setCueIfPaused(t);
+    const time = Math.max(0, Math.min(Math.max(0, dur - 0.01), base + dt));
+    el.currentTime = time;
+    setCurrent(time);
+    setCueIfPaused(time);
   };
 
   // === Hot cues ===
   const triggerHotCue = (i) => {
     const el = audioRef.current;
     if (!el || !objectUrl) return;
-    const t = hotCues[i];
-    if (t == null) {
+    const cueT = hotCues[i];
+    if (cueT == null) {
       const next = [...hotCues];
       next[i] = snapToGrid(el.currentTime || 0);
       setHotCues(next);
     } else {
-      el.currentTime = t;
-      setCurrent(t);
+      el.currentTime = cueT;
+      setCurrent(cueT);
     }
   };
 
@@ -546,9 +550,9 @@ export default function Deck({
     const raw = el.currentTime || 0;
     const snapped = snapToGrid(raw);
     // si el snap lo dejaría pegado o antes del IN, usar el punto crudo
-    const t = snapped > loopIn + 0.05 ? snapped : raw;
-    if (t <= loopIn + 0.05) return;
-    setLoopOut(t);
+    const time = snapped > loopIn + 0.05 ? snapped : raw;
+    if (time <= loopIn + 0.05) return;
+    setLoopOut(time);
     setLoopOn(true);
   };
 
@@ -616,11 +620,11 @@ export default function Deck({
     const start = performance.now();
 
     const step = (now) => {
-      const t = Math.min(1, (now - start) / DURATION_MS);
-      const k = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+      const p = Math.min(1, (now - start) / DURATION_MS);
+      const k = p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
       el.playbackRate = startRate + (target - startRate) * k;
 
-      if (t < 1) {
+      if (p < 1) {
         pitchRafRef.current = requestAnimationFrame(step);
       } else {
         pitchRafRef.current = null;
@@ -661,11 +665,11 @@ export default function Deck({
     const startVal = bendPct;
 
     const step = (now) => {
-      const t = Math.min(1, (now - start) / BEND_RELEASE_MS);
-      const k = 1 - t;
+      const p = Math.min(1, (now - start) / BEND_RELEASE_MS);
+      const k = 1 - p;
       const v = startVal * k;
       setBendPct(v);
-      if (t < 1 && !bendHoldRef.current) {
+      if (p < 1 && !bendHoldRef.current) {
         bendRafRef.current = requestAnimationFrame(step);
       } else if (!bendHoldRef.current) {
         setBendPct(0);
@@ -687,13 +691,13 @@ export default function Deck({
       <div className="relative grid gap-4">
         <header className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold tracking-tight shrink-0">
-            {`Deck ${side}`}
+            {t("deck", { side })}
             {isActive && (
               <span
                 className="ml-2 text-[9px] align-middle text-sky-400 border border-sky-500/40 rounded px-1 py-0.5"
-                title="Deck activo: recibe los atajos de teclado"
+                title={t("keyboardBadgeTitle")}
               >
-                TECLADO
+                {t("keyboardBadge")}
               </span>
             )}
           </h2>
@@ -701,23 +705,30 @@ export default function Deck({
             {getFilenameWithoutExtension()}
           </span>
         </header>
-        {/* Archivo */}
-        <label className="flex items-center gap-3 min-w-0">
+        {/* Archivo (botón propio: el input nativo no se puede traducir) */}
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-4 py-2 rounded-xl bg-neutral-200 text-neutral-900 text-sm font-semibold hover:bg-white/90 whitespace-nowrap"
+          >
+            {t("loadFile")}
+          </button>
           <input
+            ref={fileInputRef}
             type="file"
             accept="audio/*,.mp3,.wav,.ogg,.flac"
             onChange={onFile}
-            className="block w-full min-w-0 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-neutral-200 file:text-neutral-900 hover:file:bg-white/90 cursor-pointer"
+            className="hidden"
           />
-        </label>
+        </div>
         {/* Content */}
-        <div className="flex flex-row gap-2 w-full">
+        <div className="flex flex-row gap-3 w-full">
           <div className="flex flex-col gap-1 flex-1 min-w-0">
             {/* Tiempo + BPM */}
             <div className="flex items-center justify-between">
               <div className="flex items-baseline gap-2">
                 <h5
-                  className="tracking-tight cursor-pointer"
+                  className="tracking-tight cursor-pointer tabular-nums"
                   onClick={() =>
                     setReverseAdvancedTime(
                       (prevReverseTime) => !prevReverseTime
@@ -730,26 +741,26 @@ export default function Deck({
                 </h5>
                 {objectUrl && (
                   <span
-                    className="text-[10px] text-orange-400"
-                    title="Punto CUE: se fija al posicionar la pista en pausa; Stop vuelve aquí"
+                    className="text-[10px] text-orange-400 tabular-nums whitespace-nowrap"
+                    title={t("cueTitle")}
                   >
-                    CUE {calcDuration(cuePoint)}
+                    {t("cue")} {calcDuration(cuePoint)}
                   </span>
                 )}
               </div>
-              <div className="text-right text-xs text-neutral-400 leading-tight">
+              <div className="text-right text-xs text-neutral-400 leading-tight tabular-nums min-w-20 shrink-0">
                 <div>{calcDuration(duration)}</div>
                 <div
                   ref={bpmDisplayRef}
                   onClick={onTapBeat}
                   className="cursor-pointer select-none"
-                  title="Haz click al ritmo (TAP): reancla la rejilla de beats y recalcula el BPM"
+                  title={t("bpmDisplayTitle")}
                 >
                   {runningBpm
                     ? `${runningBpm.toFixed(1)} BPM`
                     : bpm
                     ? `${bpm} BPM`
-                    : "BPM --"}
+                    : t("bpmNone")}
                 </div>
               </div>
             </div>
@@ -776,13 +787,13 @@ export default function Deck({
                 zoom={zoom}
                 scroll={scroll}
                 follow={follow}
-                onSeek={(t) => {
+                onSeek={(time) => {
                   const el = audioRef.current;
                   if (!el) return;
-                  el.currentTime = t;
-                  setCurrent(t);
+                  el.currentTime = time;
+                  setCurrent(time);
                   setFollow(false);
-                  setCueIfPaused(t);
+                  setCueIfPaused(time);
                 }}
                 onDragSeek={onDragSeek}
                 onNudge={onNudge}
@@ -797,14 +808,14 @@ export default function Deck({
               {analyzing === "wave" && (
                 <div className="absolute inset-x-0 top-0 h-20 flex items-center justify-center rounded-lg bg-neutral-900/70 pointer-events-none">
                   <span className="text-xs text-neutral-300 animate-pulse">
-                    ⏳ Analizando pista…
+                    {t("analyzingTrack")}
                   </span>
                 </div>
               )}
               {analyzing === "bpm" && (
                 <div className="absolute inset-x-0 bottom-8 flex justify-center pointer-events-none">
                   <span className="px-2 py-0.5 rounded bg-neutral-900/80 text-[10px] text-neutral-300 animate-pulse">
-                    ⏳ Detectando BPM…
+                    {t("detectingBpm")}
                   </span>
                 </div>
               )}
@@ -829,9 +840,9 @@ export default function Deck({
                   <button
                     onClick={() => setFollow(true)}
                     className="px-2 py-0.5 text-[10px] bg-neutral-700 text-neutral-300 rounded hover:bg-neutral-600"
-                    title="Volver a seguir la reproducción"
+                    title={t("followTitle")}
                   >
-                    🔁 Seguir
+                    {t("follow")}
                   </button>
                 )}
               </div>
@@ -853,29 +864,32 @@ export default function Deck({
             </div>
             {/* Transporte */}
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              {!isPlaying ? (
-                <button
-                  onClick={play}
-                  disabled={!objectUrl}
-                  className="px-4 py-2 rounded-2xl bg-emerald-500 text-black font-semibold disabled:opacity-50"
-                >
-                  ▶︎ Play
-                </button>
-              ) : (
-                <button
-                  onClick={pause}
-                  className="px-4 py-2 rounded-2xl bg-yellow-400 text-black font-semibold"
-                >
-                  ❚❚ Pausa
-                </button>
-              )}
+              {/* Un solo botón: en grid reservamos el ancho del texto más
+                  largo (play/pausa) para que no baile al alternar idioma */}
+              <button
+                onClick={isPlaying ? pause : play}
+                disabled={!objectUrl && !isPlaying}
+                className={`px-4 py-2 rounded-2xl font-semibold text-black grid place-items-center disabled:opacity-50 ${
+                  isPlaying ? "bg-yellow-400" : "bg-emerald-500"
+                }`}
+              >
+                <span className="col-start-1 row-start-1 invisible h-0" aria-hidden>
+                  {t("play")}
+                </span>
+                <span className="col-start-1 row-start-1 invisible h-0" aria-hidden>
+                  {t("pause")}
+                </span>
+                <span className="col-start-1 row-start-1 whitespace-nowrap">
+                  {isPlaying ? t("pause") : t("play")}
+                </span>
+              </button>
               <button
                 onClick={stop}
                 disabled={!objectUrl}
-                className="px-4 py-2 rounded-2xl bg-neutral-200 text-black font-semibold disabled:opacity-50"
-                title="Para y vuelve al punto CUE"
+                className="px-4 py-2 rounded-2xl bg-neutral-200 text-black font-semibold text-center min-w-24 disabled:opacity-50"
+                title={t("stopTitle")}
               >
-                ■ Stop
+                {t("stop")}
               </button>
               {/* min-w fijo: que el texto SYNC·MST no ensanche y desplace la UI */}
               <button
@@ -888,11 +902,11 @@ export default function Deck({
                 }`}
                 title={
                   syncActive
-                    ? `Sync fijado: sigue el BPM de ${syncLabel} (el pitch se ajusta solo)`
-                    : "Activa sync continuo: este deck seguirá el BPM del otro deck o del master"
+                    ? t("syncActiveTitle", { source: syncLabel })
+                    : t("syncTitle")
                 }
               >
-                {syncActive ? `SYNC·${syncLabel}` : "SYNC"}
+                {syncActive ? `${t("sync")}·${syncLabel}` : t("sync")}
               </button>
               <button
                 onClick={() => setKeyLock(side, !keyLock)}
@@ -902,15 +916,15 @@ export default function Deck({
                     ? "bg-sky-400 text-black border-sky-300"
                     : "bg-neutral-800 text-neutral-200 border-neutral-700"
                 }`}
-                title="Key lock: mantiene el tono al cambiar el tempo (OFF = modo vinilo)"
+                title={t("keyLockTitle")}
               >
-                🔒 Key
+                {t("keyLock")}
               </button>
             </div>
             {/* Hot cues + Jump + Loop, alineados y separados del transporte */}
             <div className="flex items-center gap-x-4 gap-y-2 flex-wrap text-xs mt-1 pt-3 border-t border-neutral-800/70">
               <div className="flex items-center gap-1">
-                {hotCues.map((t, i) => (
+                {hotCues.map((cueT, i) => (
                   <button
                     key={i}
                     onClick={(e) => {
@@ -924,7 +938,7 @@ export default function Deck({
                     disabled={!objectUrl}
                     className="w-7 h-7 rounded-lg border font-bold disabled:opacity-40"
                     style={
-                      t != null
+                      cueT != null
                         ? {
                             backgroundColor: HOT_CUE_COLORS[i],
                             borderColor: HOT_CUE_COLORS[i],
@@ -937,9 +951,12 @@ export default function Deck({
                           }
                     }
                     title={
-                      t != null
-                        ? `Hot cue ${i + 1}: saltar a ${calcDuration(t)} · borrar con click derecho o Shift+click`
-                        : `Hot cue ${i + 1}: fijar en la posición actual`
+                      cueT != null
+                        ? t("hotCueGoTitle", {
+                            n: i + 1,
+                            time: calcDuration(cueT),
+                          })
+                        : t("hotCueSetTitle", { n: i + 1 })
                     }
                   >
                     {i + 1}
@@ -948,12 +965,12 @@ export default function Deck({
               </div>
               {/* Beat jump */}
               <div className="flex items-center gap-1">
-                <span className="text-neutral-500 mr-1">Jump</span>
+                <span className="text-neutral-500 mr-1">{t("jump")}</span>
                 <button
                   onClick={() => beatJump(-1)}
                   disabled={!objectUrl || !bpm}
                   className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-bold disabled:opacity-40"
-                  title={`Salta ${jumpBeats} beats hacia atrás`}
+                  title={t("jumpBackTitle", { n: jumpBeats })}
                 >
                   «
                 </button>
@@ -962,7 +979,7 @@ export default function Deck({
                   onChange={(e) => setJumpBeats(Number(e.target.value))}
                   disabled={!objectUrl || !bpm}
                   className="bg-neutral-800 border border-neutral-700 rounded-lg px-1 py-1 disabled:opacity-40"
-                  title="Tamaño del salto en beats"
+                  title={t("jumpSizeTitle")}
                 >
                   {[1, 2, 4, 8, 16, 32].map((n) => (
                     <option key={n} value={n}>
@@ -974,7 +991,7 @@ export default function Deck({
                   onClick={() => beatJump(+1)}
                   disabled={!objectUrl || !bpm}
                   className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-bold disabled:opacity-40"
-                  title={`Salta ${jumpBeats} beats hacia delante`}
+                  title={t("jumpFwdTitle", { n: jumpBeats })}
                 >
                   »
                 </button>
@@ -982,9 +999,9 @@ export default function Deck({
                   onClick={onTapBeat}
                   disabled={!objectUrl}
                   className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-semibold active:bg-orange-400 active:text-black disabled:opacity-40"
-                  title="Pulsa al ritmo mientras suena: reancla la rejilla de beats en cada tap y con varios taps recalcula el BPM"
+                  title={t("tapTitle")}
                 >
-                  TAP
+                  {t("tap")}
                 </button>
                 <button
                   onClick={() => setQuantize((q) => !q)}
@@ -994,13 +1011,13 @@ export default function Deck({
                       ? "bg-violet-500/80 border-violet-400 text-black"
                       : "bg-neutral-800 border-neutral-700 text-neutral-400"
                   }`}
-                  title="Quantize: imanta hot cues, loops y saltos al beat más cercano de la rejilla"
+                  title={t("quantizeTitle")}
                 >
                   Q
                 </button>
               </div>
               <div className="flex items-center gap-1">
-                <span className="text-neutral-500 mr-1">Loop</span>
+                <span className="text-neutral-500 mr-1">{t("loop")}</span>
                 <button
                   onClick={setLoopInNow}
                   disabled={!objectUrl}
@@ -1009,9 +1026,9 @@ export default function Deck({
                       ? "bg-sky-500/30 border-sky-500/50 text-sky-300"
                       : "bg-neutral-800 border-neutral-700 text-neutral-300"
                   }`}
-                  title="Marca el inicio del loop en la posición actual"
+                  title={t("loopInTitle")}
                 >
-                  IN
+                  {t("loopIn")}
                 </button>
                 <button
                   onClick={setLoopOutNow}
@@ -1021,15 +1038,15 @@ export default function Deck({
                       ? "bg-sky-500/30 border-sky-500/50 text-sky-300"
                       : "bg-neutral-800 border-neutral-700 text-neutral-300"
                   }`}
-                  title="Marca el final del loop y lo activa"
+                  title={t("loopOutTitle")}
                 >
-                  OUT
+                  {t("loopOut")}
                 </button>
                 <button
                   onClick={() => autoLoop(4)}
                   disabled={!objectUrl || !bpm}
                   className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 disabled:opacity-40"
-                  title="Loop automático de 4 beats desde el beat anterior"
+                  title={t("loop4Title")}
                 >
                   4
                 </button>
@@ -1037,7 +1054,7 @@ export default function Deck({
                   onClick={() => autoLoop(8)}
                   disabled={!objectUrl || !bpm}
                   className="px-2 py-1 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 disabled:opacity-40"
-                  title="Loop automático de 8 beats desde el beat anterior"
+                  title={t("loop8Title")}
                 >
                   8
                 </button>
@@ -1049,21 +1066,21 @@ export default function Deck({
                       ? "bg-emerald-500 border-emerald-400 text-black"
                       : "bg-neutral-800 border-neutral-700 text-neutral-300"
                   }`}
-                  title="Activa/desactiva el loop marcado"
+                  title={t("loopToggleTitle")}
                 >
                   ⟳
                 </button>
               </div>
             </div>
           </div>
-          <div className="flex flex-col gap-2 w-20 shrink-0 items-center">
+          <div className="flex flex-col gap-2 w-24 shrink-0 items-center">
             {/* Pitch + Bend */}
             <div className="flex flex-col items-center">
-              <span className="text-xs text-neutral-400">
-                Pitch: {livePitch.toFixed(2)}%
+              <span className="text-xs text-neutral-400 w-full text-center truncate tabular-nums">
+                {t("pitch")}: {livePitch.toFixed(2)}%
               </span>
-              <span className="text-[10px] text-sky-300">
-                bend {bendPct > 0 ? "+" : ""}
+              <span className="text-[10px] text-sky-300 w-full text-center truncate tabular-nums">
+                {t("bend")} {bendPct > 0 ? "+" : ""}
                 {bendPct.toFixed(2)}%
                 {keyLock && " · 🔒"}
               </span>
@@ -1087,7 +1104,7 @@ export default function Deck({
                 onTouchStart={() => startBend(-1)}
                 onTouchEnd={releaseBend}
                 className="px-2.5 py-1 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs"
-                title="Bend − (más lento mientras mantienes)"
+                title={t("bendMinusTitle")}
               >
                 −
               </button>
@@ -1098,7 +1115,7 @@ export default function Deck({
                 onTouchStart={() => startBend(+1)}
                 onTouchEnd={releaseBend}
                 className="px-2.5 py-1 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs"
-                title="Bend + (más rápido mientras mantienes)"
+                title={t("bendPlusTitle")}
               >
                 +
               </button>
@@ -1108,7 +1125,7 @@ export default function Deck({
               value={pitchRange}
               onChange={onRangeChange}
               className="bg-neutral-800 border border-neutral-700 rounded-lg px-1 py-1 text-xs text-neutral-300"
-              title="Rango del fader de pitch"
+              title={t("rangeTitle")}
             >
               <option value={8}>±8%</option>
               <option value={16}>±16%</option>

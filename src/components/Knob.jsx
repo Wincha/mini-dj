@@ -12,13 +12,19 @@ export default function Knob({
   killed = false, // banda muerta (kill de EQ): aguja y texto en rojo
   onContextMenu,
   resetValue, // doble click = volver a este valor
+  killLabel = "KILL",
 }) {
   const pct = (value - min) / (max - min); // 0..1
   const deg = useMemo(() => -135 + pct * 270, [pct]); // [-135°, +135°]
 
+  // Ancho fijo: el texto del valor ("OFF" ↔ "LPF 100%") y las etiquetas
+  // traducidas no deben desplazar el resto del mixer
+  const blockWidth = Math.max(size + 24, 68);
+
   return (
     <div
       className="flex flex-col items-center gap-0.5 select-none"
+      style={{ width: blockWidth }}
       onContextMenu={onContextMenu}
       onDoubleClick={
         resetValue !== undefined
@@ -61,15 +67,20 @@ export default function Knob({
       {/* Label y valor */}
       {label && (
         <span
-          className={`text-xs ${killed ? "text-red-400" : "text-neutral-400"}`}
+          className={`text-xs w-full text-center truncate ${
+            killed ? "text-red-400" : "text-neutral-400"
+          }`}
+          title={label}
         >
           {label}
         </span>
       )}
       <span
-        className={`text-[10px] ${killed ? "text-red-400 font-bold" : "text-neutral-500"}`}
+        className={`text-[10px] w-full text-center truncate tabular-nums ${
+          killed ? "text-red-400 font-bold" : "text-neutral-500"
+        }`}
       >
-        {killed ? "KILL" : format ? format(value) : `${value?.toFixed(1)} dB`}
+        {killed ? killLabel : format ? format(value) : `${value?.toFixed(1)} dB`}
       </span>
     </div>
   );

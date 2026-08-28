@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useI18n } from "../i18n/context";
 
 // Diálogo de configuración: salidas de audio (tarjeta/salida por destino)
 // y modo de análisis del tracklist. Los cambios se aplican desde MiniDJPlayer.
 export default function ConfigDialog({ open, onClose, config, onConfigChange }) {
+  const { t } = useI18n();
   const [devices, setDevices] = useState([]);
   const [labelsAllowed, setLabelsAllowed] = useState(false);
 
@@ -55,7 +57,7 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
         <option value="">{extraOption}</option>
         {devices.map((d, i) => (
           <option key={d.deviceId || i} value={d.deviceId}>
-            {d.label || `Salida ${i + 1}`}
+            {d.label || t("outputDevice", { n: i + 1 })}
           </option>
         ))}
       </select>
@@ -72,10 +74,11 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">⚙ Configuración</h2>
+          <h2 className="text-lg font-semibold">{t("configHeading")}</h2>
           <button
             onClick={onClose}
             className="px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 text-sm hover:bg-neutral-700"
+            title={t("close")}
           >
             ✕
           </button>
@@ -84,47 +87,43 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
         {/* Salidas de audio */}
         <div className="grid gap-3">
           <h3 className="text-sm font-semibold text-neutral-300">
-            Salidas de audio
+            {t("audioOutputs")}
           </h3>
           {!labelsAllowed && devices.length > 0 && (
             <button
               onClick={requestLabels}
               className="px-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-300 hover:bg-neutral-700 text-left"
             >
-              🔓 Pedir permiso para ver los nombres de los dispositivos
+              {t("requestLabels")}
             </button>
           )}
           {ctxSinkSupported ? (
-            deviceSelect("masterOut", "Master (mix)", "Salida por defecto")
+            deviceSelect("masterOut", t("masterMix"), t("defaultOutput"))
           ) : (
             <p className="text-[10px] text-neutral-500">
-              Este navegador no permite cambiar la salida del master
-              (AudioContext.setSinkId).
+              {t("noMasterSink")}
             </p>
           )}
           {sinkSupported ? (
             <>
-              {deviceSelect("cueOut", "Pre-escucha (🎧 Cue)", "Salida por defecto")}
+              {deviceSelect("cueOut", t("preListenOut"), t("defaultOutput"))}
               {deviceSelect(
                 "deckAOut",
-                "Deck A (mezcla externa)",
-                "Mezcla interna (por el master)"
+                t("deckExternal", { side: "A" }),
+                t("internalMix")
               )}
               {deviceSelect(
                 "deckBOut",
-                "Deck B (mezcla externa)",
-                "Mezcla interna (por el master)"
+                t("deckExternal", { side: "B" }),
+                t("internalMix")
               )}
               <p className="text-[10px] text-neutral-500">
-                Si asignas una salida dedicada a un deck, deja de sonar por el
-                master (modo mesa externa). Por defecto todo va por la misma
-                tarjeta.
+                {t("externalNote")}
               </p>
             </>
           ) : (
             <p className="text-[10px] text-neutral-500">
-              Este navegador no soporta elegir dispositivo de salida
-              (setSinkId).
+              {t("noSinkSupport")}
             </p>
           )}
         </div>
@@ -132,16 +131,16 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
         {/* Análisis del tracklist */}
         <div className="grid gap-2">
           <h3 className="text-sm font-semibold text-neutral-300">
-            Análisis de canciones de la lista
+            {t("analysisHeading")}
           </h3>
           {[
             {
               value: "auto",
-              label: "Automático (en segundo plano, despacio)",
+              label: t("analysisAuto"),
             },
             {
               value: "deck",
-              label: "Solo al cargarlas en un deck",
+              label: t("analysisDeck"),
             },
           ].map((opt) => (
             <label

@@ -33,7 +33,8 @@ Two‑deck DJ app built with React, Vite and Tailwind — everything runs locall
 ### Extras
 - Keyboard shortcuts on the active deck (click a deck or Q/P to switch): Space play/pause, C cue/stop, 1‑3 hot cues, I/O loop in/out, L loop toggle, ←/→ nudge.
 - Config dialog (⚙): pick the sound card/output for the master mix, the headphone cue, and optionally a dedicated output per deck (external‑mixer mode); choose the track‑analysis mode.
-- Responsive layout down to phone widths (decks stack, mixer moves below); Dark Reader–friendly.
+- **11 languages** (Spanish, English, Catalan, Galician, Basque, French, Italian, Portuguese, Chinese, Japanese, Korean), auto‑detected from the browser with English as fallback and a selector under the title; the choice is remembered.
+- Responsive layout down to phone widths (decks stack, mixer moves below); Dark Reader–friendly. Controls reserve stable widths so translated or changing labels never shift the layout.
 
 ## Quick start
 1) Install deps: `npm install` (Node 18+ recommended).  
@@ -58,6 +59,7 @@ Two‑deck DJ app built with React, Vite and Tailwind — everything runs locall
 - `src/audio/engine.js` – Web Audio graph (decks, EQ, filter, crossfader, cue bus, recording, AGC).
 - `src/audio/utils.js` – loudness analysis and BeatDetect (BPM detection, adapted from Arthur Beaulieu's library).
 - `src/audio/analyzeTrack.js` – background BPM/duration analysis for the crate.
+- `src/i18n/` – language provider, detection and the 11 locale dictionaries.
 - `src/lib/` – IndexedDB track store, shared constants.
 - `src/components/*` – decks, mixer, meters, track list, config dialog, waveform, sliders, knobs.
 
