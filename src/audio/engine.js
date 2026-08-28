@@ -20,11 +20,11 @@ export class AudioEngine {
     // Limitador de seguridad: atrapa los picos antes de la salida para que
     // el mix nunca clipee (es lo que se oía como distorsión con auto-gain)
     this.limiter = this.ctx.createDynamicsCompressor();
-    this.limiter.threshold.value = -3;
+    this.limiter.threshold.value = -1;
     this.limiter.knee.value = 0;
     this.limiter.ratio.value = 20;
-    this.limiter.attack.value = 0.002;
-    this.limiter.release.value = 0.15;
+    this.limiter.attack.value = 0.003;
+    this.limiter.release.value = 0.05;
 
     this.masterGain.connect(this.mixAnalyser);
     this.masterGain.connect(this.masterTrim);

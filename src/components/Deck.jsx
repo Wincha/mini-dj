@@ -160,10 +160,12 @@ export default function Deck({
       applyAutoCue(onsetTime);
     }
 
-    // Loudness con mediana + pico real de la pista
-    const { db: medianDb } = analyzeTrackLoudness(audioBuffer);
-    const targetDb = -14; // objetivo de RMS (antes -8: saturaba)
-    let gainDb = targetDb - medianDb;
+    // Loudness de TODA la pista, calculado una sola vez al cargarla:
+    // referencia = percentil 90 (la parte con todo el ritmo), nunca se
+    // vuelve a mover durante la reproducción
+    const { loudDb } = analyzeTrackLoudness(audioBuffer);
+    const targetDb = -12; // nivel objetivo para la parte fuerte
+    let gainDb = targetDb - loudDb;
 
     const MIN_GAIN_DB = -12;
     const MAX_GAIN_DB = +6;
@@ -1111,7 +1113,7 @@ export default function Deck({
                 onChange={(e) => onPitchChange(e.target.value)}
                 height={150}
                 width={20}
-                inverted={false}
+                inverted={true}
               />
             </div>
             <div className="flex items-center justify-center gap-1">

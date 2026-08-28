@@ -17,12 +17,12 @@ Two‑deck DJ app built with React, Vite and Tailwind — everything runs locall
 
 ### Mixing
 - Mixer with **dipless crossfader** (each deck at full gain on its own half; only the opposite side attenuates), deck volume faders and VU meters per deck and mix bus.
-- Per‑deck EQ (gain/high/mid/low) with band **kills** (right‑click a knob; double‑click resets), plus auto‑gain (on by default) that normalizes loudness per track without pushing peaks past −1 dBFS.
+- Per‑deck EQ (gain/high/mid/low) with band **kills** (right‑click a knob; double‑click resets), plus auto‑gain (on by default): the whole track is analyzed once on load and a single static gain is applied — no pumping during playback — referenced to the loud part of the song and capped so peaks never pass −1 dBFS.
 - DJ **filter** knob per deck: one control sweeping LPF (left) ↔ HPF (right), off at center.
 - Continuous **SYNC** per deck: while engaged the deck keeps following its tempo source — the other deck's effective BPM or the adjustable **Master Sync** BPM — and the button shows which (SYNC·A/B or SYNC·MST). Pitch range auto‑expands as needed.
 - Beat‑match panel: both decks' waveforms and beat markers around the playhead to line them up visually.
 - Headphone pre‑listen (PFL) per deck with its own volume.
-- Master output trim with gentle AGC (auto level) and a safety limiter before the output, so the mix stays loud without clipping.
+- Safety limiter before the output so summing decks never clips; master level stays where you put it (no dynamic auto-leveling).
 - Session recording: record the master mix and download it as `.webm`.
 
 ### Library

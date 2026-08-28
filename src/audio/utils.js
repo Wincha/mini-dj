@@ -38,15 +38,20 @@ export function analyzeTrackLoudness(audioBuffer) {
     return { rms: 0, db: -Infinity };
   }
 
-  // Ordenar y coger mediana
+  // Ordenar: mediana (referencia general) y percentil 90 (la parte de la
+  // canción "con todo el ritmo", que es lo que se percibe como su nivel)
   usable.sort((a, b) => a - b);
   const mid = Math.floor(usable.length / 2);
   const medianRms =
     usable.length % 2 === 0 ? (usable[mid - 1] + usable[mid]) / 2 : usable[mid];
 
-  const db = 20 * Math.log10(medianRms + 1e-9);
+  const p90Idx = Math.min(usable.length - 1, Math.floor(usable.length * 0.9));
+  const loudRms = usable[p90Idx];
 
-  return { rms: medianRms, db };
+  const db = 20 * Math.log10(medianRms + 1e-9);
+  const loudDb = 20 * Math.log10(loudRms + 1e-9);
+
+  return { rms: medianRms, db, loudRms, loudDb };
 }
 
 export class BeatDetect {

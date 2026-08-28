@@ -87,11 +87,6 @@ export default function MiniDJMixer() {
   const analysisBusyRef = useRef(false);
 
   useEffect(() => {
-    engine.setMasterAutoLevel(true);
-    return () => engine.setMasterAutoLevel(false);
-  }, [engine]);
-
-  useEffect(() => {
     engine.setMaster(master);
   }, [engine, master]);
 

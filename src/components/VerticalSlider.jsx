@@ -24,12 +24,13 @@ export default function VerticalSlider({
         disabled={disabled}
         style={{
           // Equivalente moderno de "appearance: slider-vertical" (deprecado):
-          // vertical-lr + direction rtl = máximo arriba
+          // vertical-lr + direction rtl = máximo arriba (base)
           writingMode: "vertical-lr",
           direction: "rtl",
           ...(width ? { width: `${width}px` } : {}),
           ...(height ? { height: `${height}px` } : {}),
-          transform: !inverted ? "scaleY(-1)" : "none",
+          // inverted = máximo abajo (p.ej. pitch estilo Technics)
+          transform: inverted ? "scaleY(-1)" : "none",
         }}
         className={`accent-white cursor-pointer ${
           disabled ? "opacity-50 cursor-not-allowed" : ""
