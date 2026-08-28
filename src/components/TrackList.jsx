@@ -142,7 +142,7 @@ function TrackList({
         displayTitle(tr),
         tr.artist ?? "",
         formatDuration(tr.duration),
-        tr.bpm ?? "",
+        tr.bpm != null ? tr.bpm.toFixed(2) : "",
         keyLabel(tr.musicalKey?.pitchClass, tr.musicalKey?.mode) ?? "",
         formatSize(tr.size),
         played,
@@ -367,7 +367,7 @@ function TrackList({
                 <span className="w-24 shrink-0 text-center">
                   {track.bpm != null ? (
                     <span className="inline-block w-full px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold tabular-nums truncate">
-                      {track.bpm} {t("bpm")}
+                      {track.bpm.toFixed(1)} {t("bpm")}
                     </span>
                   ) : track.analyzeFailed ? (
                     <span className="text-[10px] text-neutral-600">{t("bpmUnknown")}</span>

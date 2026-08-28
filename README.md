@@ -12,6 +12,7 @@ Two‑deck DJ app built with React, Vite and Tailwind — everything runs locall
 - Traktor‑style beat jump: selectable size (1–32 beats) with « / » to jump backward or forward.
 - Quantize (Q, on by default): hot cues, loop in/out and beat jumps snap to the nearest grid beat.
 - Grid TAP: tap the TAP button (or the BPM display) on the beats while the track plays — each tap re‑anchors the beat grid in real time and several taps recompute the BPM. Taps are measured in track time, so pitch doesn't skew the result.
+- Manual beat‑grid editing, both axes: `« ‹ › »` shift the grid anchor (10 ms / 1 ms) when the grid is out of phase with the hits, and `−− − + ++` stretch or squeeze the spacing between beats (±0.1 / ±0.01 BPM) pivoting on the anchor, for a grid that starts square and drifts. `÷2` / `×2` fix a tempo detected at half or double, and `⟳` re‑runs the detection *around* the BPM and anchor you set by hand instead of from scratch. All of it changes the track's **base BPM**, never the pitch, and every change propagates at once to waveform markers, quantize, auto 4/8‑beat loops, beat jump, the beat‑match panel and the BPM feeding SYNC.
 - Waveform: zoom (buttons or mouse wheel), follow mode, manual scroll, click‑to‑seek, beat markers, cue/hot‑cue/loop overlays. Vinyl‑style dragging: while paused, push the wave to position the track under the playhead; while playing, dragging nudges the tempo like a pitch bend.
 - Analysis feedback over the waveform ("Analizando pista…", "Detectando BPM…").
 
@@ -28,7 +29,7 @@ Two‑deck DJ app built with React, Vite and Tailwind — everything runs locall
 
 ### Library
 - Track list (crate): add multiple songs, load them to Deck A/B with one click, badges showing what's loaded where and (in gray) where each song was already played.
-- Persists in IndexedDB across reloads; BPM/duration analyzed slowly in the background (idle time, one at a time) or only on deck load (configurable).
+- Persists in IndexedDB across reloads (including a hand‑adjusted beat grid, which the background analysis never overwrites); BPM/duration analyzed slowly in the background (idle time, one at a time) or only on deck load (configurable).
 - Search box, sorting by name/BPM/duration, and CSV export.
 
 ### Extras
@@ -118,7 +119,8 @@ nothing here has to change.
 ## Project layout
 - `src/MiniDJPlayer.jsx` – top-level layout, shared state, sync engine, keyboard shortcuts.
 - `src/audio/engine.js` – Web Audio graph (decks, EQ, filter, crossfader, cue bus, recording, AGC).
-- `src/audio/utils.js` – loudness analysis and BeatDetect (BPM detection, adapted from Arthur Beaulieu's library).
+- `src/audio/utils.js` – loudness and waveform analysis.
+- `src/audio/beatGrid.js` – BPM and beat‑grid detection (own MIT implementation: filter bank → onset envelope → autocorrelation → phase).
 - `src/audio/analyzeTrack.js` – background BPM/duration analysis for the crate.
 - `src/i18n/` – language provider, detection and the 11 locale dictionaries.
 - `src/lib/` – IndexedDB track store, shared constants.
@@ -130,5 +132,9 @@ nothing here has to change.
 
 ## Notes / limitations
 - Runs in the browser or as an Electron desktop app; uses `AudioContext` and `createObjectURL`, so tracks stay local either way.
-- Auto BPM detection can miss on unusual material; the grid TAP is the fallback (and fixes the grid anchor too).
+- Auto BPM detection can miss on unusual material; the grid TAP and the manual grid controls (phase / spacing / ÷2 / ×2 / guided re‑analysis) are the fallback.
 - PFL and per‑deck outputs are only useful with more than one audio device (e.g. USB headphones): pick outputs in ⚙ Config; the master keeps playing on its own output.
+
+## License
+MIT — see [LICENSE](LICENSE). All the audio analysis (loudness, waveform, key and BPM/beat grid) is
+first‑party code; no GPL/AGPL library is bundled.

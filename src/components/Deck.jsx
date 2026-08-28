@@ -10,11 +10,12 @@ import Fader from "./Fader";
 import WaveformCanvas from "./WaveformCanvas";
 import { HOT_CUE_COLORS } from "../lib/constants";
 import { useI18n } from "../i18n/context";
+import { analyzeTrackLoudness, analyzeWaveform } from "../audio/utils";
 import {
-  analyzeTrackLoudness,
-  analyzeWaveform,
-  BeatDetect,
-} from "../audio/utils";
+  buildBeatGrid,
+  computeOnsetEnvelope,
+  detectTempoAsync,
+} from "../audio/beatGrid";
 import { detectKey } from "../audio/keyDetect";
 import { keyLabel } from "../lib/camelot";
 import { readTrackMetadata } from "../audio/metadata";
@@ -61,15 +62,30 @@ function Deck({
   const { t } = useI18n();
   const pitchRafRef = useRef(null);
   const audioRef = useRef(null);
-  const beatDetectorRef = useRef(null);
   const bpmDisplayRef = useRef(null);
   const fileInputRef = useRef(null);
 
   // === Forma de onda / análisis ===
   const [waveData, setWaveData] = useState(null);
   const [bandIndex, setBandIndex] = useState(null);
-  const [beats, setBeats] = useState([]);
+  // === Rejilla de beats ===
+  // BPM base de la pista (el analizado, o el que haya dejado el usuario a
+  // mano). NO incluye el pitch: el pitch va aparte, en el fader.
   const [bpm, setBpm] = useState(null);
+  // Ancla: instante (en segundos) donde cae un beat. Toda la rejilla se
+  // deriva de (bpm, ancla), así que moverla es mover este valor.
+  const [gridAnchor, setGridAnchor] = useState(0);
+  // La rejilla la ha tocado el usuario: el análisis automático ya no la pisa
+  // y el ajuste se guarda en IndexedDB.
+  const [gridManual, setGridManual] = useState(false);
+  // Duración según el buffer decodificado: está disponible antes que la del
+  // <audio>, y así la rejilla se puede dibujar en cuanto acaba el análisis.
+  const [bufferDuration, setBufferDuration] = useState(0);
+  // Envolvente de onsets de la pista (~200 KB). Se guarda para poder
+  // reanalizar sobre el ajuste manual sin volver a decodificar el audio.
+  const envelopeRef = useRef(null);
+  // La pista llegó con una rejilla ajustada a mano: no la sobreescribimos
+  const cachedGridRef = useRef(false);
 
   // Etiquetas ID3 y tonalidad de la pista cargada
   const [tags, setTags] = useState(null); // {artist, title, album}
@@ -106,7 +122,7 @@ function Deck({
   const [loopOut, setLoopOut] = useState(null);
   const [loopOn, setLoopOn] = useState(false);
 
-  // Fase de análisis para feedback en UI: null | "wave" | "bpm"
+  // Fase de análisis para feedback en UI: null | "wave" | "bpm" | "regrid"
   const [analyzing, setAnalyzing] = useState(null);
 
   const [bendPct, setBendPct] = useState(0);
@@ -124,9 +140,34 @@ function Deck({
     return bpm * factor;
   }, [bpm, pitchPct, bendPct]);
 
-  const updateBpm = (value) => {
-    setBpm(value);
-    if (typeof onBpmDetected === "function") onBpmDetected(side, value);
+  // La rejilla SIEMPRE se deriva de (bpm, ancla, duración). Por eso cualquier
+  // ajuste manual se propaga solo a todo lo que la usa: marcas de la onda,
+  // quantize, loops automáticos de 4/8, beat jump y el panel de beat match.
+  const gridDuration = duration || bufferDuration;
+  const beats = useMemo(
+    () => buildBeatGrid(bpm, gridAnchor, gridDuration),
+    [bpm, gridAnchor, gridDuration]
+  );
+
+  const onAnalysisRef = useRef(onAnalysis);
+  onAnalysisRef.current = onAnalysis;
+  useEffect(() => {
+    onAnalysisRef.current?.(side, { beats });
+  }, [beats, side]);
+
+  const round2 = (v) => Math.round(v * 100) / 100;
+
+  // Punto ÚNICO de cambio de rejilla: BPM base + ancla. Avisa al padre, que
+  // lo usa para el SYNC entre decks y para persistirlo en IndexedDB.
+  const applyGrid = (nextBpm, nextAnchor, manual) => {
+    const anchor = Number.isFinite(nextAnchor) ? nextAnchor : gridAnchor;
+    const isManual = manual === undefined ? gridManual : manual;
+    setBpm(nextBpm);
+    setGridAnchor(anchor);
+    setGridManual(isManual);
+    if (typeof onBpmDetected === "function") {
+      onBpmDetected(side, nextBpm, { anchor, manual: isManual });
+    }
   };
 
   const getFilenameWithoutExtension = () => {
@@ -148,10 +189,11 @@ function Deck({
   };
 
   // === Waveform + bandas + loudness (una sola pasada por el buffer) ===
-  async function extractWaveform(arrayBuffer, trackName, loadId) {
+  async function extractWaveform(arrayBuffer, loadId) {
     const audioBuffer = await engine.ctx.decodeAudioData(arrayBuffer);
 
     const duration = audioBuffer.duration;
+    setBufferDuration(duration);
     const { waveData: norm, bandIndex: bands, peak } =
       analyzeWaveform(audioBuffer);
 
@@ -192,11 +234,7 @@ function Deck({
       onAutoGainComputed(side, gainDb);
     }
     setAnalyzing("bpm");
-    detectBeats({
-      audioBuffer,
-      duration,
-      trackName: trackName || "track",
-    });
+    detectBeats({ audioBuffer, loadId });
 
     // Tonalidad: aprovecha el MISMO AudioBuffer, sin otro fetch ni otro
     // decode. Bloquea el hilo principal unos cientos de ms, así que se deja
@@ -225,89 +263,43 @@ function Deck({
     }
   };
 
-  // === BPM avanzado + detección de beats ===
-  // Trabaja sobre el AudioBuffer ya decodificado: nada de re-fetch del blob
-  // (congelaba la reproducción si dabas al play durante el análisis)
-  async function detectBeats({ audioBuffer, duration: trackDuration, trackName }) {
-    const detector = beatDetectorRef.current;
-    if (!detector || !audioBuffer) {
-      setBeats([]);
-      updateBpm(null);
-      setAnalyzing(null);
-      return;
-    }
-
+  // === Detección de BPM y rejilla ===
+  // Trabaja sobre el AudioBuffer YA decodificado: nada de volver a leer el
+  // blob que está reproduciendo el <audio> (eso congelaba la reproducción si
+  // se pulsaba Play durante el análisis).
+  async function detectBeats({ audioBuffer, loadId }) {
     try {
-      const info = await detector.getBeatInfoFromBuffer(audioBuffer, trackName);
+      // La envolvente se calcula siempre, aunque la rejilla venga ajustada a
+      // mano: es lo que necesita después el reanálisis guiado.
+      const envelope = await computeOnsetEnvelope(audioBuffer);
+      if (loadIdRef.current !== loadId) return;
+      envelopeRef.current = envelope;
 
-      const resolvedBpm = info?.bpm;
-      if (!resolvedBpm) {
-        updateBpm(null);
-        setBeats([]);
+      if (cachedGridRef.current) return; // rejilla manual guardada: no se toca
+
+      const info = envelope ? await detectTempoAsync(envelope) : null;
+      if (loadIdRef.current !== loadId) return;
+
+      if (!info?.bpm) {
+        applyGrid(null, 0, false);
         return;
       }
-
-      const normalizedBpm = Math.round(resolvedBpm);
-      updateBpm(normalizedBpm);
-
-      if (Number.isFinite(trackDuration) && trackDuration > 0) {
-        const beatInterval = 60 / resolvedBpm;
-        const beatStart = Number.isFinite(info?.firstBar)
-          ? Math.max(0, info.firstBar)
-          : Number.isFinite(info?.offset)
-          ? Math.max(0, info.offset)
-          : 0;
-        const beatsArr = [];
-        for (let time = beatStart; time < trackDuration; time += beatInterval) {
-          beatsArr.push(time);
-        }
-        setBeats(beatsArr);
-        if (typeof onAnalysis === "function") {
-          onAnalysis(side, { beats: beatsArr });
-        }
-        // Auto-cue definitivo: primer beat detectado
-        applyAutoCue(beatStart);
-      } else {
-        setBeats([]);
-      }
+      applyGrid(round2(info.bpm), info.anchor, false);
+      // Auto-cue definitivo: primer beat detectado
+      applyAutoCue(info.anchor);
     } catch (err) {
       console.error("Beat detection failed", err);
-      setBeats([]);
-      updateBpm(null);
+      if (loadIdRef.current === loadId) applyGrid(null, 0, false);
     } finally {
-      setAnalyzing(null);
+      if (loadIdRef.current === loadId) setAnalyzing(null);
     }
   }
-
-  // Instancia única del detector de beats (solo en cliente)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (beatDetectorRef.current) return;
-    try {
-      beatDetectorRef.current = new BeatDetect({
-        sampleRate: engine?.ctx?.sampleRate || 44100,
-      });
-    } catch (err) {
-      console.error("Unable to init BeatDetect", err);
-    }
-  }, [engine]);
 
   // === TAP de rejilla (estilo Traktor) ===
   // Pulsando al ritmo mientras suena: cada tap reancla la rejilla de beats a
   // ese instante, y con 2+ taps se recalcula el BPM. Los taps se guardan en
   // TIEMPO DE PISTA, así el pitch no falsea el cálculo.
   const tapRef = useRef({ taps: [], lastWall: 0 });
-
-  const rebuildGrid = (anchor, interval) => {
-    const dur = duration || audioRef.current?.duration || 0;
-    if (!(dur > 0) || !(interval > 0)) return;
-    // primer beat >= 0 en fase con el ancla
-    const start = anchor - Math.floor(anchor / interval) * interval;
-    const arr = [];
-    for (let time = start; time < dur; time += interval) arr.push(time);
-    setBeats(arr);
-    if (typeof onAnalysis === "function") onAnalysis(side, { beats: arr });
-  };
 
   const onTapBeat = () => {
     const el = audioRef.current;
@@ -335,11 +327,73 @@ function Deck({
         const mid = Math.floor(ivs.length / 2);
         interval =
           ivs.length % 2 ? ivs[mid] : (ivs[mid - 1] + ivs[mid]) / 2;
-        updateBpm(Math.round((60 / interval) * 10) / 10);
       }
     }
     if (!interval) return; // sin BPM previo y con un solo tap no hay rejilla
-    rebuildGrid(anchor, interval);
+    applyGrid(round2(60 / interval), anchor, true);
+  };
+
+  // === Ajuste manual de la rejilla ===
+  // Dos ejes independientes: la FASE (dónde empieza) y la SEPARACIÓN entre
+  // beats (el BPM base de la pista). Ninguno de los dos toca el pitch.
+  const GRID_NUDGE_FINE = 0.001; // 1 ms
+  const GRID_NUDGE_COARSE = 0.01; // 10 ms
+  const GRID_BPM_FINE = 0.01;
+  const GRID_BPM_COARSE = 0.1;
+  const GRID_BPM_MIN = 20;
+  const GRID_BPM_MAX = 400;
+
+  // Mueve la rejilla entera hacia atrás/adelante sin cambiar el BPM
+  const nudgeGrid = (deltaSec) => {
+    if (!bpm) return;
+    applyGrid(bpm, gridAnchor + deltaSec, true);
+  };
+
+  // Estira o encoge la separación entre beats. Pivota sobre el ancla: como
+  // buildBeatGrid siempre deja un beat exactamente en el ancla, este se queda
+  // donde está y los demás se juntan o se separan a partir de ahí.
+  const stretchGrid = (deltaBpm) => {
+    if (!bpm) return;
+    const next = Math.min(
+      GRID_BPM_MAX,
+      Math.max(GRID_BPM_MIN, round2(bpm + deltaBpm))
+    );
+    applyGrid(next, gridAnchor, true);
+  };
+
+  // x2 / ÷2: cuando la detección pilla el tempo al doble o a la mitad.
+  // El ancla se mantiene, así que la rejilla sigue cuadrada donde ya lo estaba.
+  const scaleGrid = (factor) => {
+    if (!bpm) return;
+    // Sin redondear: si se redondeara a 2 decimales, ÷2 seguido de x2 no
+    // devolvería exactamente el BPM de partida
+    const next = bpm * factor;
+    if (next < GRID_BPM_MIN || next > GRID_BPM_MAX) return;
+    applyGrid(next, gridAnchor, true);
+  };
+
+  // Reanálisis guiado: busca el mejor encaje ALREDEDOR del BPM y el ancla que
+  // ha dejado el usuario, no desde cero. Reutiliza la envolvente de onsets,
+  // así que no hay ni fetch ni decode.
+  const regridFromManual = async () => {
+    const envelope = envelopeRef.current;
+    if (!envelope || !bpm || analyzing) return;
+    const loadId = loadIdRef.current;
+    setAnalyzing("regrid");
+    try {
+      const info = await detectTempoAsync(envelope, {
+        seedBpm: bpm,
+        seedAnchor: gridAnchor,
+        bpmTolerance: 6,
+      });
+      // Si mientras tanto se ha cargado otra pista, el resultado no vale
+      if (loadIdRef.current !== loadId) return;
+      if (info?.bpm) applyGrid(round2(info.bpm), info.anchor, true);
+    } catch (err) {
+      console.error("Guided regrid failed", err);
+    } finally {
+      if (loadIdRef.current === loadId) setAnalyzing(null);
+    }
   };
 
   // conectar el mediaElement al engine + listeners básicos del <audio>
@@ -398,6 +452,15 @@ function Deck({
     cachedKeyRef.current = cached?.musicalKey || null;
     const loadId = ++loadIdRef.current;
 
+    // Rejilla guardada por el usuario: se restaura tal cual y el análisis
+    // automático no la vuelve a pisar.
+    const hasManualGrid = Boolean(
+      cached?.gridManual && cached?.bpm > 0 && Number.isFinite(cached?.gridAnchor)
+    );
+    cachedGridRef.current = hasManualGrid;
+    envelopeRef.current = null;
+    setBufferDuration(0);
+
     setFileName(f.name);
     setWaveData(null);
     setBandIndex(null);
@@ -407,7 +470,7 @@ function Deck({
         ? { artist: cached.artist, title: cached.title, album: cached.album }
         : null
     );
-    setBeats([]);
+    applyGrid(hasManualGrid ? cached.bpm : null, hasManualGrid ? cached.gridAnchor : 0, hasManualGrid);
     setCuePoint(0);
     setHotCues([null, null, null]);
     setLoopIn(null);
@@ -416,7 +479,7 @@ function Deck({
     cueManualRef.current = false;
     setAnalyzing("wave");
     if (typeof onAnalysis === "function") {
-      onAnalysis(side, { waveData: null, beats: [], duration: 0 });
+      onAnalysis(side, { waveData: null, duration: 0 });
     }
 
     // Etiquetas ID3: no dependen del decode, así que se leen en paralelo y
@@ -456,7 +519,7 @@ function Deck({
 
       // decodeAudioData "consume" (detach) el arrayBuffer, por eso la copia
       // del blob se hace antes
-      await extractWaveform(arrayBuffer, f.name, loadId);
+      await extractWaveform(arrayBuffer, loadId);
     })().catch((err) => {
       console.error("Track load failed", err);
       setAnalyzing(null);
@@ -478,6 +541,9 @@ function Deck({
       artist: tr.artist,
       title: tr.title,
       album: tr.album,
+      bpm: tr.bpm,
+      gridAnchor: tr.gridAnchor,
+      gridManual: tr.gridManual,
     });
   }, [externalTrack?.loadToken, externalTrack?.file]);
 
@@ -983,10 +1049,10 @@ function Deck({
                   </span>
                 </div>
               )}
-              {analyzing === "bpm" && (
+              {(analyzing === "bpm" || analyzing === "regrid") && (
                 <div className="absolute inset-x-0 bottom-8 flex justify-center pointer-events-none">
                   <span className="px-2 py-0.5 rounded bg-neutral-900/80 text-[10px] text-neutral-300 animate-pulse">
-                    {t("detectingBpm")}
+                    {analyzing === "regrid" ? t("regridding") : t("detectingBpm")}
                   </span>
                 </div>
               )}
@@ -1092,8 +1158,10 @@ function Deck({
                 {t("keyLock")}
               </button>
             </div>
-            {/* Herramientas agrupadas: hot cues · jump · rejilla · loop */}
-            <div className="flex flex-wrap items-stretch gap-2 text-xs mt-1 pt-3 border-t border-neutral-800/70">
+            {/* Herramientas agrupadas en dos filas:
+                arriba hot cues + rejilla, abajo jump + loop */}
+            <div className="flex flex-col gap-2 text-xs mt-1 pt-3 border-t border-neutral-800/70">
+              <div className="flex flex-wrap items-stretch gap-2">
               <Group label={t("hotCuesLabel")}>
                 {hotCues.map((cueT, i) => (
                   <button
@@ -1135,6 +1203,142 @@ function Deck({
                 ))}
               </Group>
 
+              <Group label={t("gridLabel")}>
+                <div className="flex flex-col gap-1">
+                  {/* Fila 1: TAP · quantize · octava · reanálisis guiado.
+                      A la derecha, el BPM BASE de la pista: es el que define
+                      la rejilla y NO es el pitch (el pitch va en el fader). */}
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      onClick={onTapBeat}
+                      disabled={!objectUrl}
+                      className="h-7 px-2 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-semibold active:bg-orange-400 active:text-black disabled:opacity-40"
+                      title={t("tapTitle")}
+                    >
+                      {t("tap")}
+                    </button>
+                    <button
+                      onClick={() => setQuantize((q) => !q)}
+                      disabled={!objectUrl}
+                      className={`w-7 h-7 rounded-lg border font-bold disabled:opacity-40 ${
+                        quantize
+                          ? "bg-violet-500/80 border-violet-400 text-black"
+                          : "bg-neutral-800 border-neutral-700 text-neutral-400"
+                      }`}
+                      title={t("quantizeTitle")}
+                    >
+                      Q
+                    </button>
+                    <span className="w-px h-5 bg-neutral-800 mx-0.5" />
+                    <GridBtn
+                      onClick={() => scaleGrid(0.5)}
+                      disabled={!bpm}
+                      title={t("gridHalveTitle")}
+                    >
+                      ÷2
+                    </GridBtn>
+                    <GridBtn
+                      onClick={() => scaleGrid(2)}
+                      disabled={!bpm}
+                      title={t("gridDoubleTitle")}
+                    >
+                      ×2
+                    </GridBtn>
+                    <GridBtn
+                      onClick={regridFromManual}
+                      disabled={!bpm || !!analyzing}
+                      title={t("gridRegridTitle")}
+                      className={
+                        analyzing === "regrid"
+                          ? "bg-orange-400 border-orange-300 text-black animate-pulse"
+                          : ""
+                      }
+                    >
+                      ⟳
+                    </GridBtn>
+                    <span
+                      className="ml-auto pl-1.5 w-12 shrink-0 text-right text-[10px] text-neutral-400 tabular-nums"
+                      title={t("gridBaseBpmTitle")}
+                    >
+                      {bpm ? `${bpm.toFixed(2)}` : "—"}
+                    </span>
+                  </div>
+                  {/* Fila 2: los dos ejes del ajuste manual.
+                      Izquierda: mover la rejilla (fase). Derecha: separar o
+                      juntar los beats (BPM base de la pista). */}
+                  <div className="flex items-end gap-1.5">
+                    <Cluster
+                      label={t("gridPhaseLabel")}
+                      title={t("gridPhaseTitle")}
+                    >
+                      <GridBtn
+                        onClick={() => nudgeGrid(-GRID_NUDGE_COARSE)}
+                        disabled={!bpm}
+                        title={t("gridPhaseBackCoarseTitle")}
+                      >
+                        «
+                      </GridBtn>
+                      <GridBtn
+                        onClick={() => nudgeGrid(-GRID_NUDGE_FINE)}
+                        disabled={!bpm}
+                        title={t("gridPhaseBackFineTitle")}
+                      >
+                        ‹
+                      </GridBtn>
+                      <GridBtn
+                        onClick={() => nudgeGrid(GRID_NUDGE_FINE)}
+                        disabled={!bpm}
+                        title={t("gridPhaseFwdFineTitle")}
+                      >
+                        ›
+                      </GridBtn>
+                      <GridBtn
+                        onClick={() => nudgeGrid(GRID_NUDGE_COARSE)}
+                        disabled={!bpm}
+                        title={t("gridPhaseFwdCoarseTitle")}
+                      >
+                        »
+                      </GridBtn>
+                    </Cluster>
+                    <Cluster
+                      label={t("gridTempoLabel")}
+                      title={t("gridTempoTitle")}
+                    >
+                      <GridBtn
+                        onClick={() => stretchGrid(-GRID_BPM_COARSE)}
+                        disabled={!bpm}
+                        title={t("gridTempoDownCoarseTitle")}
+                      >
+                        <span className="tracking-tighter">−−</span>
+                      </GridBtn>
+                      <GridBtn
+                        onClick={() => stretchGrid(-GRID_BPM_FINE)}
+                        disabled={!bpm}
+                        title={t("gridTempoDownFineTitle")}
+                      >
+                        −
+                      </GridBtn>
+                      <GridBtn
+                        onClick={() => stretchGrid(GRID_BPM_FINE)}
+                        disabled={!bpm}
+                        title={t("gridTempoUpFineTitle")}
+                      >
+                        +
+                      </GridBtn>
+                      <GridBtn
+                        onClick={() => stretchGrid(GRID_BPM_COARSE)}
+                        disabled={!bpm}
+                        title={t("gridTempoUpCoarseTitle")}
+                      >
+                        <span className="tracking-tighter">++</span>
+                      </GridBtn>
+                    </Cluster>
+                  </div>
+                </div>
+              </Group>
+              </div>
+
+              <div className="flex flex-wrap items-stretch gap-2">
               <Group label={t("jump")}>
                 <button
                   onClick={() => beatJump(-1)}
@@ -1164,29 +1368,6 @@ function Deck({
                   title={t("jumpFwdTitle", { n: jumpBeats })}
                 >
                   »
-                </button>
-              </Group>
-
-              <Group label={t("gridLabel")}>
-                <button
-                  onClick={onTapBeat}
-                  disabled={!objectUrl}
-                  className="h-7 px-2 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-semibold active:bg-orange-400 active:text-black disabled:opacity-40"
-                  title={t("tapTitle")}
-                >
-                  {t("tap")}
-                </button>
-                <button
-                  onClick={() => setQuantize((q) => !q)}
-                  disabled={!objectUrl}
-                  className={`w-7 h-7 rounded-lg border font-bold disabled:opacity-40 ${
-                    quantize
-                      ? "bg-violet-500/80 border-violet-400 text-black"
-                      : "bg-neutral-800 border-neutral-700 text-neutral-400"
-                  }`}
-                  title={t("quantizeTitle")}
-                >
-                  Q
                 </button>
               </Group>
 
@@ -1244,6 +1425,7 @@ function Deck({
                   ⟳
                 </button>
               </Group>
+              </div>
             </div>
           </div>
           <div className="flex flex-col gap-2 w-24 shrink-0 items-center">
@@ -1329,11 +1511,48 @@ export default memo(Deck);
 // Grupo de herramientas del deck: etiqueta pequeña + botones en una caja
 function Group({ label, children }) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900/40 px-2 py-1">
-      <span className="text-[9px] uppercase tracking-wide text-neutral-500">
-        {label}
-      </span>
+    <div className="flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900/40 px-2 py-1 min-w-0">
+      <Tiny className="text-[9px]">{label}</Tiny>
       <div className="flex items-center gap-1">{children}</div>
     </div>
+  );
+}
+
+// Sub-grupo dentro de una caja: una etiqueta diminuta sobre su fila de botones
+function Cluster({ label, title, children }) {
+  return (
+    <div className="flex flex-col gap-0.5 min-w-0" title={title}>
+      <Tiny className="text-[8px]">{label}</Tiny>
+      <div className="flex items-center gap-0.5">{children}</div>
+    </div>
+  );
+}
+
+// Etiqueta de caja. El truco de width:0 + minWidth:100% hace que NO cuente
+// para el ancho intrínseco: así una traducción larga no ensancha la caja ni
+// mueve el resto de la interfaz al cambiar de idioma.
+function Tiny({ className = "", children }) {
+  return (
+    <span
+      className={`uppercase tracking-wide text-neutral-500 truncate ${className}`}
+      style={{ width: 0, minWidth: "100%" }}
+    >
+      {children}
+    </span>
+  );
+}
+
+// Botón cuadrado de la caja de rejilla (ancho fijo: nada se mueve al cambiar
+// de estado o de idioma)
+function GridBtn({ onClick, disabled, title, className = "", children }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`w-6 h-7 shrink-0 grid place-items-center rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 text-[11px] font-bold leading-none disabled:opacity-40 ${className}`}
+    >
+      {children}
+    </button>
   );
 }

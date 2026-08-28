@@ -49,6 +49,10 @@ export async function storeTrack(track) {
       size,
       file,
       bpm = null,
+      // Rejilla de beats: ancla (segundos) y si la ajustó el usuario a mano.
+      // Se guardan para no perder el ajuste manual al recargar.
+      gridAnchor = null,
+      gridManual = false,
       duration = null,
       playedOn = {},
       // Etiquetas ID3 y tonalidad: se guardan para no re-analizar en cada
@@ -69,6 +73,8 @@ export async function storeTrack(track) {
         size,
         file,
         bpm,
+        gridAnchor,
+        gridManual,
         duration,
         playedOn,
         artist,

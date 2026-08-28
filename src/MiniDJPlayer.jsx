@@ -187,11 +187,14 @@ export default function MiniDJMixer() {
       if (cancelled) return;
       analysisBusyRef.current = true;
       quickAnalyzeTrack(pending.file)
-        .then(({ bpm, duration, musicalKey }) => {
+        .then(({ bpm, gridAnchor, duration, musicalKey }) => {
           setTracks((prev) =>
             prev.map((t) => {
               if (t.id !== pending.id) return t;
-              const updated = { ...t, bpm, duration, musicalKey, analyzed: true };
+              // Un ajuste manual de rejilla nunca lo pisa el análisis de fondo
+              const updated = t.gridManual
+                ? { ...t, duration, musicalKey, analyzed: true }
+                : { ...t, bpm, gridAnchor, duration, musicalKey, analyzed: true };
               storeTrack(updated);
               return updated;
             })
@@ -284,21 +287,32 @@ export default function MiniDJMixer() {
     else setPitchPctB(v);
   }, []);
 
-  // BPM detectado en un deck: actualiza sync y, si la pista vino de la lista,
-  // completa sus datos (útil en modo "analizar solo al cargar en deck")
-  const onBpmDetected = useCallback((side, bpm) => {
-    setBpms((prev) => ({ ...prev, [side]: bpm }));
+  // Rejilla de un deck (detectada o ajustada a mano): alimenta el SYNC y, si
+  // la pista vino de la lista, se guarda para no perder el ajuste al recargar
+  const onBpmDetected = useCallback((side, bpm, grid) => {
+    setBpms((prev) => (prev[side] === bpm ? prev : { ...prev, [side]: bpm }));
     if (!bpm) return;
     const loaded = deckTracksRef.current[side];
     if (!loaded) return;
     const dur = audioElsRef.current[side]?.duration;
+    const anchor = Number.isFinite(grid?.anchor) ? grid.anchor : null;
+    const manual = Boolean(grid?.manual);
     setTracks((prev) =>
       prev.map((t) => {
         if (t.id !== loaded.id) return t;
-        if (t.bpm === bpm && t.duration != null) return t;
+        if (
+          t.bpm === bpm &&
+          t.gridAnchor === anchor &&
+          Boolean(t.gridManual) === manual &&
+          t.duration != null
+        ) {
+          return t;
+        }
         const updated = {
           ...t,
           bpm,
+          gridAnchor: anchor,
+          gridManual: manual,
           duration: Number.isFinite(dur) && dur > 0 ? dur : t.duration,
         };
         storeTrack(updated);
@@ -455,6 +469,8 @@ export default function MiniDJMixer() {
             size: file.size,
             file,
             bpm: null,
+            gridAnchor: null,
+            gridManual: false,
             duration: null,
             playedOn: {},
             analyzed: false,
