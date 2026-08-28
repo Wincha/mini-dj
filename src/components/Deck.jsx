@@ -5,8 +5,7 @@ import {
   useMemo,
   useImperativeHandle,
 } from "react";
-import VerticalSlider from "./VerticalSlider";
-import HorizontalSlider from "./HorizontalSlider";
+import Fader from "./Fader";
 import WaveformCanvas from "./WaveformCanvas";
 import { HOT_CUE_COLORS } from "../lib/constants";
 import { useI18n } from "../i18n/context";
@@ -785,13 +784,17 @@ export default function Deck({
               </div>
             </div>
             {/* Seek global */}
-            <HorizontalSlider
+            <Fader
               min={0}
               max={Math.max(1, Math.floor(duration))}
               step={0.01}
               value={Number.isFinite(current) ? current : 0}
               onChange={(e) => seek(e.target.value)}
               disabled={!objectUrl}
+              thickness={16}
+              railThickness={5}
+              accent={side === "A" ? "#22d3ee" : "#e879f9"}
+              ariaLabel="Seek"
             />
             {/* Forma de onda */}
             <div className="relative w-full pb-7">
@@ -1105,15 +1108,19 @@ export default function Deck({
                 {keyLock && " · 🔒"}
               </span>
               {/* Como un plato Technics: arriba más lento (−), abajo más rápido (+) */}
-              <VerticalSlider
+              <Fader
+                orientation="vertical"
                 min={-pitchRange}
                 max={pitchRange}
                 step={0.01}
                 value={pitchPct}
                 onChange={(e) => onPitchChange(e.target.value)}
-                height={150}
-                width={20}
-                inverted={true}
+                length={150}
+                fill="center"
+                ticks={9}
+                invert={true}
+                accent="#7dd3fc"
+                ariaLabel={t("pitch")}
               />
             </div>
             <div className="flex items-center justify-center gap-1">

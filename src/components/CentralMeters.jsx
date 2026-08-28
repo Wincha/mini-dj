@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import HorizontalSlider from "./HorizontalSlider";
+import Fader from "./Fader";
 import VUBar from "./VUBar";
 import BeatMatchPanel from "./BeatMatchPanel";
 import LanguageSelector from "./LanguageSelector";
@@ -128,13 +128,15 @@ export default function CentralMeters({
             ⚙
           </button>
         </div>
-        <HorizontalSlider
+        <Fader
           min={0}
           max={1}
           step={0.01}
           value={master}
           onChange={(e) => setMaster(Number(e.target.value))}
-          className="w-full"
+          ticks={11}
+          accent="#34d399"
+          ariaLabel={t("master")}
         />
         <VUBar engine={engine} side="Both" direction="horizontal" />
         {/* Master Sync */}

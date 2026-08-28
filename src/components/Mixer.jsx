@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import HorizontalSlider from "./HorizontalSlider";
-import VerticalSlider from "./VerticalSlider";
+import Fader from "./Fader";
 import VUBar from "./VUBar";
 import Knob from "./Knob";
 import { useI18n } from "../i18n/context";
@@ -189,13 +188,16 @@ export default function Mixer({
             toggleAutoGain={toggleAutoGain}
           />
           <div className="flex flex-row self-stretch gap-3 sm:gap-6">
-            <VerticalSlider
+            <Fader
+              orientation="vertical"
               min={0}
               max={1}
               step={0.01}
               value={vol.A}
               onChange={(e) => onVolChange("A", Number(e.target.value))}
-              className="h-auto gap-2"
+              ticks={11}
+              accent="#22d3ee"
+              ariaLabel="Volumen A"
             />
             <VUBar engine={engine} side={"A"} />
           </div>
@@ -203,13 +205,16 @@ export default function Mixer({
         <div className="flex flex-row items-center gap-3 sm:gap-4">
           <div className="flex flex-row self-stretch gap-3 sm:gap-6">
             <VUBar engine={engine} side={"B"} />
-            <VerticalSlider
+            <Fader
+              orientation="vertical"
               min={0}
               max={1}
               step={0.01}
               value={vol.B}
               onChange={(e) => onVolChange("B", Number(e.target.value))}
-              className="h-auto gap-2"
+              ticks={11}
+              accent="#e879f9"
+              ariaLabel="Volumen B"
             />
           </div>
           <EqColumn
@@ -232,12 +237,16 @@ export default function Mixer({
           <span>{t("crossfader")}</span>
           <span>B</span>
         </div>
-        <HorizontalSlider
+        <Fader
           min={0}
           max={1}
           step={0.001}
           value={cross}
           onChange={(e) => setCross(Number(e.target.value))}
+          fill="center"
+          ticks={5}
+          thickness={26}
+          ariaLabel="Crossfader"
         />
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import HorizontalSlider from "./HorizontalSlider";
+import Fader from "./Fader";
 import { useI18n } from "../i18n/context";
 
 // PFL / pre-escucha: envía el deck (pre-fader, post-EQ) a la salida elegida
@@ -70,12 +70,16 @@ export default function HeadphoneCue({ engine, cueDeviceId }) {
       </div>
       <div className="flex items-center gap-2 flex-1 min-w-40">
         <span className="text-[10px] text-neutral-500 shrink-0">{t("vol")}</span>
-        <HorizontalSlider
+        <Fader
           min={0}
           max={1}
           step={0.01}
           value={hpVol}
           onChange={(e) => onHpVol(Number(e.target.value))}
+          ticks={11}
+          thickness={18}
+          accent="#fbbf24"
+          ariaLabel={t("vol")}
         />
       </div>
       <audio ref={audioRef} className="hidden" />
