@@ -50,6 +50,29 @@ Two‑deck DJ app built with React, Vite and Tailwind — everything runs locall
 - `npm run preview` – preview the production build locally.
 - `npm run lint` – run ESLint.
 
+### Tests
+- `npm test` – run the whole suite once (Vitest).
+- `npm run test:watch` – watch mode while developing.
+- `npm run test:coverage` – suite plus a coverage report (`coverage/index.html`).
+
+Two projects share one config (`vitest.config.js`):
+- **unit** – plain Node, no DOM: audio logic (`beatGrid`, `engine`, `utils`,
+  `levelMeter`, `keyDetect`), `src/lib` and the locale dictionaries. The Web
+  Audio graph is faked in `tests/helpers/fakeAudio.js`, and test signals are
+  generated on the fly in `tests/helpers/signals.js` – no audio fixtures in the
+  repo.
+- **dom** – jsdom + React Testing Library for the components.
+
+Browser (end-to-end) tests live apart in `vitest.e2e.config.js`:
+- `npm run test:e2e` – four user flows (load a track, play, sync two decks,
+  settings survive a reload, switching language does not break the layout).
+- They drive the **system Chrome** through `puppeteer-core` (no browser is
+  downloaded); set `MINI_DJ_CHROME` if it lives somewhere unusual. With no
+  Chrome around they skip themselves instead of failing, and `npm test` never
+  runs them, so CI cannot go flaky because of them.
+- `AudioContext.resume()` never settles without an audio device, so the harness
+  replaces it with a resolved promise before the app loads.
+
 ### Desktop (Electron)
 - `npm run desktop:dev` – Vite dev server + Electron pointed at it (HMR, DevTools open).
 - `npm run desktop:preview` – build and run Electron against `dist/`, the exact production code path.
@@ -94,13 +117,39 @@ npm version patch   # or minor / major
 git push --follow-tags
 ```
 
+### Error log
+Failures are typed: each one carries a code naming the area it broke in
+(`AUDIO-SINK-CUE`, `TRACK-LOAD`, `ANALYSIS-BEATS`, `LIB-DB-SAVE`, `UPDATE-CHECK`…),
+the context of the moment and the original error. Messages are always in English and
+never translated — the UI speaks eleven languages, the log cannot, or the same
+failure would read eleven different ways and be impossible to search or compare.
+
+The catalogue lives in `src/lib/log.js` (renderer) and `electron/logger.cjs` (main
+process); both write the same line format. The page keeps the last 200 entries in
+`localStorage` and shows them under ⚙ Settings › Log, where they can be downloaded,
+copied or cleared. The desktop app also appends everything — including the lines the
+page forwards over IPC — to a single file:
+
+```
+Windows   %APPDATA%\mini-dj\mini-dj.log
+Linux     ~/.config/mini-dj/mini-dj.log
+macOS     ~/Library/Application Support/mini-dj/mini-dj.log
+```
+
+The folder is `mini-dj`, not `Mini DJ`: `app.getName()` reads the `name` field of the
+packaged `package.json`, while `productName` only lives in `electron-builder.yml` and
+governs the executable and installer names. **Do not "fix" this.** Renaming it moves
+the whole `userData` directory, orphaning the IndexedDB track library, the settings
+and the chosen language — the app would come back empty.
+
 ### Auto-update
 Enabled on Windows and on the Linux AppImage, via `electron-updater`
 (`electron/updater.cjs`). Eight seconds after start-up the app asks GitHub for the
 latest **published** release, downloads the installer in the background and shows a
 toast offering to restart and install; if you dismiss it, the update is applied when
-you close the app. A failed check (no network, rate limit) is logged and ignored — it
-never interrupts a set.
+you close the app. While it works it says so — "Checking for updates…", then either
+the download or "You are on the latest version" — and a failed check (no network,
+rate limit) is reported rather than swallowed, but never interrupts a set.
 
 Three things worth knowing:
 - **A draft release does not exist for the updater.** The public GitHub API does not
@@ -141,6 +190,8 @@ Three things worth knowing:
 - `src/i18n/` – language provider, detection and the 11 locale dictionaries.
 - `src/lib/` – IndexedDB track store, shared constants.
 - `src/components/*` – decks, mixer, meters, track list, config dialog, waveform, the reusable `Fader`, knobs.
+- `tests/` – `unit/` (pure logic, Node), `dom/` (components, jsdom), `e2e/` (Chrome + puppeteer-core), `helpers/` (Web Audio double, synthetic signals, WAV generator).
+- `.github/workflows/ci.yml` – lint, tests and build on every push and PR to main.
 - `electron/` – desktop wrapper (main process, preload).
 - `scripts/electron-dev.mjs` – starts Vite and launches Electron against the resolved URL.
 - `electron-builder.yml` – packaging targets and installer options.

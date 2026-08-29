@@ -524,3 +524,48 @@ export function buildBeatGrid(bpm, anchor, duration) {
   }
   return beats;
 }
+
+// === 6. Ajuste manual de la rejilla ===
+//
+// Los tres ejes que toca el usuario desde el deck: la FASE (dónde empieza la
+// rejilla), la SEPARACIÓN entre beats (el BPM base) y la octava (×2 / ÷2).
+// Ninguno toca el pitch. Están aquí, junto a buildBeatGrid, porque son
+// operaciones sobre la rejilla: el deck solo decide cuándo aplicarlas.
+
+export const GRID_NUDGE_FINE = 0.001; // 1 ms
+export const GRID_NUDGE_COARSE = 0.01; // 10 ms
+export const GRID_BPM_FINE = 0.01;
+export const GRID_BPM_COARSE = 0.1;
+export const GRID_BPM_MIN = 20;
+export const GRID_BPM_MAX = 400;
+
+const round2 = (v) => Math.round(v * 100) / 100;
+
+/** Mueve la rejilla entera hacia atrás/adelante sin cambiar el BPM. */
+export function nudgeAnchor(anchor, deltaSec) {
+  const base = Number.isFinite(anchor) ? anchor : 0;
+  return base + deltaSec;
+}
+
+/**
+ * Estira o encoge la separación entre beats. Pivota sobre el ancla: como
+ * buildBeatGrid siempre deja un beat exactamente ahí, ese se queda donde
+ * está y los demás se juntan o se separan a partir de él.
+ * Devuelve null si no hay nada que ajustar.
+ */
+export function stretchBpm(bpm, deltaBpm) {
+  if (!(bpm > 0)) return null;
+  return Math.min(GRID_BPM_MAX, Math.max(GRID_BPM_MIN, round2(bpm + deltaBpm)));
+}
+
+/**
+ * ×2 / ÷2, para cuando la detección pilla el tempo al doble o a la mitad.
+ * Sin redondear: si se redondeara a dos decimales, ÷2 seguido de ×2 no
+ * devolvería exactamente el BPM de partida. Fuera de rango, null.
+ */
+export function scaleBpm(bpm, factor) {
+  if (!(bpm > 0)) return null;
+  const next = bpm * factor;
+  if (next < GRID_BPM_MIN || next > GRID_BPM_MAX) return null;
+  return next;
+}

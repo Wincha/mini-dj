@@ -6,6 +6,7 @@ import {
   loadStoredTracks,
   storeTrack,
   removeStoredTrack,
+  mergeTrackAnalysis,
 } from "./lib/trackStore";
 import Deck from "./components/Deck";
 import CentralMeters from "./components/CentralMeters";
@@ -210,9 +211,12 @@ export default function MiniDJMixer() {
             prev.map((t) => {
               if (t.id !== pending.id) return t;
               // Un ajuste manual de rejilla nunca lo pisa el análisis de fondo
-              const updated = t.gridManual
-                ? { ...t, duration, musicalKey, analyzed: true }
-                : { ...t, bpm, gridAnchor, duration, musicalKey, analyzed: true };
+              const updated = mergeTrackAnalysis(t, {
+                bpm,
+                gridAnchor,
+                duration,
+                musicalKey,
+              });
               storeTrack(updated);
               return updated;
             })

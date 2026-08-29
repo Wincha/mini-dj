@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'release']),
+  globalIgnores(['dist', 'release', 'coverage']),
   // Envoltorio Electron y scripts de build: se ejecutan en Node, no en el navegador
   {
     files: ['electron/**/*.cjs', 'scripts/**/*.mjs', '*.config.js'],
@@ -32,6 +32,25 @@ export default defineConfig([
         sourceType: 'module',
       },
     },
+    rules: {
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+    },
+  },
+  // Tests: Node + navegador (jsdom). Las utilidades de Vitest se importan
+  // explícitamente en cada archivo, así que no hacen falta globales suyas.
+  {
+    files: ['tests/**/*.{js,jsx}'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+      parserOptions: {
+        ecmaVersion: 'latest',
+        ecmaFeatures: { jsx: true },
+        sourceType: 'module',
+      },
+    },
+    // Igual que en src: los componentes usados solo dentro de JSX no cuentan
+    // como variables sin usar
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },

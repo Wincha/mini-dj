@@ -10,11 +10,22 @@ import Fader from "./Fader";
 import WaveformCanvas from "./WaveformCanvas";
 import { HOT_CUE_COLORS } from "../lib/constants";
 import { useI18n } from "../i18n/context";
-import { analyzeTrackLoudness, analyzeWaveform } from "../audio/utils";
+import {
+  analyzeTrackLoudness,
+  analyzeWaveform,
+  computeAutoGainDb,
+} from "../audio/utils";
 import {
   buildBeatGrid,
   computeOnsetEnvelope,
   detectTempoAsync,
+  nudgeAnchor,
+  scaleBpm,
+  stretchBpm,
+  GRID_NUDGE_FINE,
+  GRID_NUDGE_COARSE,
+  GRID_BPM_FINE,
+  GRID_BPM_COARSE,
 } from "../audio/beatGrid";
 import { detectKey } from "../audio/keyDetect";
 import { keyLabel } from "../lib/camelot";
@@ -214,25 +225,10 @@ function Deck({
       applyAutoCue(onsetTime);
     }
 
-    // Loudness de TODA la pista, calculado una sola vez al cargarla:
-    // referencia = percentil 90 (la parte con todo el ritmo), nunca se
+    // Loudness de TODA la pista, calculado una sola vez al cargarla: nunca se
     // vuelve a mover durante la reproducción
     const { loudDb } = analyzeTrackLoudness(audioBuffer);
-    const targetDb = -12; // nivel objetivo para la parte fuerte
-    let gainDb = targetDb - loudDb;
-
-    const MIN_GAIN_DB = -12;
-    const MAX_GAIN_DB = +6;
-    gainDb = Math.max(MIN_GAIN_DB, Math.min(MAX_GAIN_DB, gainDb));
-
-    // Techo de pico: aunque el RMS pida más, no dejamos que los picos
-    // pasen de -1 dBFS (es lo que distorsionaba con el auto activado)
-    if (peak > 0) {
-      const peakDb = 20 * Math.log10(peak);
-      const headroomDb = -1 - peakDb;
-      gainDb = Math.min(gainDb, headroomDb);
-    }
-    gainDb = Math.max(MIN_GAIN_DB, gainDb);
+    const gainDb = computeAutoGainDb({ loudDb, peak });
 
     if (typeof onAutoGainComputed === "function") {
       onAutoGainComputed(side, gainDb);
@@ -340,39 +336,22 @@ function Deck({
   // === Ajuste manual de la rejilla ===
   // Dos ejes independientes: la FASE (dónde empieza) y la SEPARACIÓN entre
   // beats (el BPM base de la pista). Ninguno de los dos toca el pitch.
-  const GRID_NUDGE_FINE = 0.001; // 1 ms
-  const GRID_NUDGE_COARSE = 0.01; // 10 ms
-  const GRID_BPM_FINE = 0.01;
-  const GRID_BPM_COARSE = 0.1;
-  const GRID_BPM_MIN = 20;
-  const GRID_BPM_MAX = 400;
-
-  // Mueve la rejilla entera hacia atrás/adelante sin cambiar el BPM
+  // Las operaciones viven en src/audio/beatGrid.js (funciones puras); aquí
+  // solo se aplican al estado del deck.
   const nudgeGrid = (deltaSec) => {
     if (!bpm) return;
-    applyGrid(bpm, gridAnchor + deltaSec, true);
+    applyGrid(bpm, nudgeAnchor(gridAnchor, deltaSec), true);
   };
 
-  // Estira o encoge la separación entre beats. Pivota sobre el ancla: como
-  // buildBeatGrid siempre deja un beat exactamente en el ancla, este se queda
-  // donde está y los demás se juntan o se separan a partir de ahí.
   const stretchGrid = (deltaBpm) => {
-    if (!bpm) return;
-    const next = Math.min(
-      GRID_BPM_MAX,
-      Math.max(GRID_BPM_MIN, round2(bpm + deltaBpm))
-    );
+    const next = stretchBpm(bpm, deltaBpm);
+    if (next == null) return;
     applyGrid(next, gridAnchor, true);
   };
 
-  // x2 / ÷2: cuando la detección pilla el tempo al doble o a la mitad.
-  // El ancla se mantiene, así que la rejilla sigue cuadrada donde ya lo estaba.
   const scaleGrid = (factor) => {
-    if (!bpm) return;
-    // Sin redondear: si se redondeara a 2 decimales, ÷2 seguido de x2 no
-    // devolvería exactamente el BPM de partida
-    const next = bpm * factor;
-    if (next < GRID_BPM_MIN || next > GRID_BPM_MAX) return;
+    const next = scaleBpm(bpm, factor);
+    if (next == null) return;
     applyGrid(next, gridAnchor, true);
   };
 

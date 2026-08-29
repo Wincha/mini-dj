@@ -186,3 +186,32 @@ export function analyzeWaveform(audioBuffer, { withBands = true } = {}) {
     duration,
   };
 }
+
+// === Auto-gain por pista ===
+//
+// Se calcula UNA sola vez, al cargar la pista, y no se vuelve a mover durante
+// la reproducción: el nivelado dinámico bombeaba el volumen a mitad de tema.
+// Referencia = percentil 90 del RMS (la parte con todo el ritmo).
+
+export const AUTO_GAIN_TARGET_DB = -12; // nivel objetivo para la parte fuerte
+export const AUTO_GAIN_MIN_DB = -12;
+export const AUTO_GAIN_MAX_DB = 6;
+// Techo de pico: aunque el RMS pida más ganancia, los picos no pasan de aquí.
+// Saltárselo es lo que distorsionaba con el auto activado.
+export const AUTO_GAIN_PEAK_CEILING_DB = -1;
+
+/**
+ * Ganancia en dB para una pista, a partir de su nivel (loudDb, el percentil 90
+ * que devuelve analyzeTrackLoudness) y de su pico absoluto (0..1).
+ */
+export function computeAutoGainDb({ loudDb, peak }) {
+  if (!Number.isFinite(loudDb)) return 0;
+  let gainDb = AUTO_GAIN_TARGET_DB - loudDb;
+  gainDb = Math.max(AUTO_GAIN_MIN_DB, Math.min(AUTO_GAIN_MAX_DB, gainDb));
+
+  if (peak > 0) {
+    const peakDb = 20 * Math.log10(peak);
+    gainDb = Math.min(gainDb, AUTO_GAIN_PEAK_CEILING_DB - peakDb);
+  }
+  return Math.max(AUTO_GAIN_MIN_DB, gainDb);
+}

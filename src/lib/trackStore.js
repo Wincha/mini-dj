@@ -100,3 +100,17 @@ export async function removeStoredTrack(id) {
     logError(ERRORS.LIB_DB_DELETE, err, { id });
   }
 }
+
+/**
+ * Aplica a una pista de la lista lo que ha sacado el análisis en segundo plano.
+ *
+ * Regla: un ajuste MANUAL de rejilla no lo pisa nunca el análisis automático.
+ * De una pista con `gridManual` solo se aceptan la duración y la tonalidad; el
+ * BPM y el ancla se quedan como los dejó el usuario.
+ */
+export function mergeTrackAnalysis(track, { bpm, gridAnchor, duration, musicalKey } = {}) {
+  if (track?.gridManual) {
+    return { ...track, duration, musicalKey, analyzed: true };
+  }
+  return { ...track, bpm, gridAnchor, duration, musicalKey, analyzed: true };
+}
