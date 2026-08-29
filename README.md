@@ -39,7 +39,7 @@ Two‑deck DJ app built with React, Vite and Tailwind — everything runs locall
 - Responsive layout down to phone widths (decks stack, mixer moves below); Dark Reader–friendly. Controls reserve stable widths so translated or changing labels never shift the layout.
 
 ## Quick start
-1) Install deps: `npm install` (Node 18+ recommended).  
+1) Install deps: `npm install` (Node 22+; CI builds on Node 24).  
 2) Run dev server: `npm run dev` then open the shown local URL.  
 3) Load audio files into Deck A/B and start mixing.
 
