@@ -8,6 +8,13 @@ import {
   removeStoredTrack,
   mergeTrackAnalysis,
 } from "./lib/trackStore";
+import {
+  sameCueData,
+  sanitizeHotCues,
+  sanitizeLoopRegion,
+  sanitizeSavedLoops,
+} from "./lib/cuePoints";
+import { ROLL_SIZES } from "./audio/loops";
 import Deck from "./components/Deck";
 import CentralMeters from "./components/CentralMeters";
 import Mixer from "./components/Mixer";
@@ -21,6 +28,10 @@ import { ERRORS, logError } from "./lib/log";
 
 const PITCH_RANGES = [8, 16, 50];
 const CONFIG_KEY = "mini-dj-config";
+
+// Teclas del loop roll, en el mismo orden que ROLL_SIZES (1/8 … 4 beats):
+// de izquierda a derecha, loops cada vez más largos.
+const ROLL_KEYS = ["KeyA", "KeyS", "KeyD", "KeyF", "KeyG", "KeyH"];
 
 export default function MiniDJMixer() {
   const { t } = useI18n();
@@ -103,8 +114,8 @@ export default function MiniDJMixer() {
   const lockLoadRef = useRef(lockLoadWhilePlaying);
   lockLoadRef.current = lockLoadWhilePlaying;
 
-  // Modo de visualización de los VU
-  const vuMode = config.vuMode === "led" ? "led" : "continuous";
+  // Modo de visualización de los VU: LED por defecto, como una mesa de verdad
+  const vuMode = config.vuMode === "continuous" ? "continuous" : "led";
 
   useEffect(() => {
     try {
@@ -378,6 +389,43 @@ export default function MiniDJMixer() {
     );
   }, []);
 
+  // Hot cues y loops que llegan del deck. Son del USUARIO: se guardan tal cual
+  // en la fila de la pista y ningún análisis los vuelve a tocar. Solo se
+  // escribe cuando algo ha cambiado de verdad, que esto viaja a IndexedDB.
+  const onCues = useCallback((side, data) => {
+    const loaded = deckTracksRef.current[side];
+    if (!loaded) return;
+    setTracks((prev) =>
+      prev.map((t) => {
+        if (t.id !== loaded.id) return t;
+        const hotCues = sanitizeHotCues(data.hotCues);
+        const savedLoops = sanitizeSavedLoops(data.savedLoops);
+        // undefined = "no toques el loop guardado" (pasa durante un loop roll,
+        // que es momentáneo y no debe pisar el loop de la pista)
+        const activeLoop =
+          data.activeLoop === undefined
+            ? t.activeLoop ?? null
+            : sanitizeLoopRegion(data.activeLoop);
+        if (
+          sameCueData(t.hotCues, hotCues) &&
+          sameCueData(t.savedLoops, savedLoops) &&
+          sameCueData(t.activeLoop ?? null, activeLoop)
+        ) {
+          return t;
+        }
+        const updated = { ...t, hotCues, savedLoops, activeLoop };
+        storeTrack(updated);
+        return updated;
+      })
+    );
+  }, []);
+
+  // Pista cargada desde el propio deck (📂): ya no es la de la lista, así que
+  // se suelta el vínculo y su BPM y sus cues no acaban en la fila de otra.
+  const onLocalLoad = useCallback((side) => {
+    setDeckTracks((prev) => (prev[side] ? { ...prev, [side]: null } : prev));
+  }, []);
+
   const onPlayingChange = useCallback((side, isPlaying) => {
     setPlaying((prev) => (prev[side] === isPlaying ? prev : { ...prev, [side]: isPlaying }));
     if (isPlaying) setLastStarted(side);
@@ -558,6 +606,14 @@ export default function MiniDJMixer() {
       }
 
       if (!api) return;
+
+      // Loop roll: suena mientras se mantiene la tecla (keyup lo suelta)
+      const roll = ROLL_KEYS.indexOf(e.code);
+      if (roll > -1) {
+        if (!e.repeat) api.rollStart(ROLL_SIZES[roll]);
+        return;
+      }
+
       switch (e.code) {
         case "Space":
           e.preventDefault();
@@ -569,7 +625,40 @@ export default function MiniDJMixer() {
         case "Digit1":
         case "Digit2":
         case "Digit3":
-          if (!e.repeat) api.hotCue(Number(e.code.slice(-1)) - 1);
+        case "Digit4":
+        case "Digit5":
+        case "Digit6":
+        case "Digit7":
+        case "Digit8": {
+          if (e.repeat) break;
+          // Shift borra, como el Shift+click en el pad
+          const n = Number(e.code.slice(-1)) - 1;
+          if (e.shiftKey) api.hotCueClear(n);
+          else api.hotCue(n);
+          break;
+        }
+        case "BracketLeft":
+          if (!e.repeat) api.loopMove(-1);
+          break;
+        case "BracketRight":
+          if (!e.repeat) api.loopMove(+1);
+          break;
+        case "Minus":
+          if (!e.repeat) api.loopResize(0.5);
+          break;
+        case "Equal":
+          if (!e.repeat) api.loopResize(2);
+          break;
+        case "KeyR":
+          if (e.repeat) break;
+          if (e.shiftKey) api.loopSavedToggle();
+          else api.loopSave();
+          break;
+        case "Comma":
+          if (!e.repeat) api.loopSavedSelect(-1);
+          break;
+        case "Period":
+          if (!e.repeat) api.loopSavedSelect(+1);
           break;
         case "KeyI":
           if (!e.repeat) api.loopIn();
@@ -594,8 +683,11 @@ export default function MiniDJMixer() {
     };
 
     const onKeyUp = (e) => {
+      const api = deckRefs.current[activeDeck];
       if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
-        deckRefs.current[activeDeck]?.nudgeEnd();
+        api?.nudgeEnd();
+      } else if (ROLL_KEYS.includes(e.code)) {
+        api?.rollEnd();
       }
     };
 
@@ -678,6 +770,8 @@ export default function MiniDJMixer() {
             onPlayed={onPlayed}
             onPlayingChange={onPlayingChange}
             onTrackMeta={onTrackMeta}
+            onCues={onCues}
+            onLocalLoad={onLocalLoad}
             wavePalette={wavePalette}
             externalTrack={deckTracks.A}
             isActive={activeDeck === "A"}
@@ -719,6 +813,8 @@ export default function MiniDJMixer() {
             onPlayed={onPlayed}
             onPlayingChange={onPlayingChange}
             onTrackMeta={onTrackMeta}
+            onCues={onCues}
+            onLocalLoad={onLocalLoad}
             wavePalette={wavePalette}
             externalTrack={deckTracks.B}
             isActive={activeDeck === "B"}

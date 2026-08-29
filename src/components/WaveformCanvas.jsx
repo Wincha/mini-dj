@@ -17,6 +17,7 @@ function WaveformCanvas({
   loopIn,
   loopOut,
   loopOn,
+  loopRolling,
   audioRef,
   zoom,
   scroll,
@@ -221,7 +222,8 @@ function WaveformCanvas({
         ctx.stroke();
       }
 
-      // Región de loop (verde translúcido)
+      // Región de loop. Verde el loop normal; ámbar mientras hay un loop roll
+      // puesto, para distinguir de un vistazo lo momentáneo de lo fijo.
       if (dur > 0 && loopIn != null && loopOut != null) {
         const inFrac = loopIn / dur;
         const outFrac = loopOut / dur;
@@ -234,30 +236,56 @@ function WaveformCanvas({
             w,
             ((outFrac - leftFrac) / (rightFrac - leftFrac)) * w
           );
-          ctx.fillStyle = loopOn
+          const relleno = loopRolling
+            ? "rgba(251,191,36,0.24)"
+            : loopOn
             ? "rgba(16,185,129,0.22)"
             : "rgba(16,185,129,0.10)";
+          const borde = loopRolling
+            ? "rgba(251,191,36,0.95)"
+            : "rgba(16,185,129,0.9)";
+          ctx.fillStyle = relleno;
           ctx.fillRect(x1, 0, Math.max(1, x2 - x1), h);
-          ctx.fillStyle = "rgba(16,185,129,0.9)";
+          ctx.fillStyle = borde;
           ctx.fillRect(x1, 0, 2, h);
           ctx.fillRect(x2 - 2, 0, 2, h);
         }
       }
 
-      // Hot cues (líneas de color con número)
+      // Hot cues: línea de color, chapa con el número y, si lo tiene, la
+      // etiqueta al lado. La etiqueta se recorta a la mitad del hueco que
+      // queda hasta el borde para que no cruce la onda entera.
       if (dur > 0 && hotCues) {
+        ctx.textBaseline = "alphabetic";
         for (let i = 0; i < hotCues.length; i++) {
-          const t = hotCues[i];
-          if (t == null) continue;
-          const frac = t / dur;
+          const cue = hotCues[i];
+          if (!cue || !Number.isFinite(cue.t)) continue;
+          const frac = cue.t / dur;
           if (frac < leftFrac || frac > rightFrac) continue;
           const x = ((frac - leftFrac) / (rightFrac - leftFrac)) * w;
-          ctx.fillStyle = HOT_CUE_COLORS[i] || "#fff";
+          const color = HOT_CUE_COLORS[i] || "#fff";
+          ctx.fillStyle = color;
           ctx.fillRect(x - 1, 0, 2, h);
           ctx.fillRect(x, h - 11, 10, 11);
           ctx.fillStyle = "#000";
           ctx.font = "bold 9px sans-serif";
           ctx.fillText(String(i + 1), x + 3, h - 2);
+
+          if (cue.name) {
+            ctx.font = "9px sans-serif";
+            const ancho = Math.min(ctx.measureText(cue.name).width, 64);
+            if (x + 12 + ancho + 3 < w) {
+              ctx.fillStyle = "rgba(0,0,0,0.55)";
+              ctx.fillRect(x + 11, h - 11, ancho + 4, 11);
+              ctx.fillStyle = color;
+              ctx.save();
+              ctx.beginPath();
+              ctx.rect(x + 12, h - 11, ancho, 11);
+              ctx.clip();
+              ctx.fillText(cue.name, x + 13, h - 2);
+              ctx.restore();
+            }
+          }
         }
       }
 
@@ -304,6 +332,7 @@ function WaveformCanvas({
     loopIn,
     loopOut,
     loopOn,
+    loopRolling,
     zoom,
     scroll,
     follow,

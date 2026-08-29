@@ -8,7 +8,32 @@ import {
 } from "react";
 import Fader from "./Fader";
 import WaveformCanvas from "./WaveformCanvas";
-import { HOT_CUE_COLORS } from "../lib/constants";
+import {
+  CUE_NAME_MAX,
+  HOT_CUE_COLORS,
+  MAX_SAVED_LOOPS,
+} from "../lib/constants";
+import {
+  emptyHotCues,
+  hotCuesToSlots,
+  nextLoopId,
+  sanitizeLoopRegion,
+  sanitizeName,
+  sanitizeSavedLoops,
+  slotsToHotCues,
+} from "../lib/cuePoints";
+import {
+  AUTO_LOOP_SIZES,
+  ROLL_SIZES,
+  autoLoop as computeAutoLoop,
+  beatsLabel,
+  moveLoop,
+  nearestBeat,
+  resizeLoop,
+  rollExitTime,
+  rollLoop,
+  wrapTime,
+} from "../audio/loops";
 import { useI18n } from "../i18n/context";
 import {
   analyzeTrackLoudness,
@@ -65,6 +90,8 @@ function Deck({
   onPlayed,
   onPlayingChange,
   onTrackMeta,
+  onCues,
+  onLocalLoad,
   wavePalette,
   externalTrack,
   isActive,
@@ -129,11 +156,33 @@ function Deck({
   const [cuePoint, setCuePoint] = useState(0);
   const cueManualRef = useRef(false);
 
-  // Hot cues (3 por deck) y loop
-  const [hotCues, setHotCues] = useState([null, null, null]);
+  // Hot cues: ranuras de tamaño fijo, hotCues[i] = null | { t, name }.
+  // Se guardan por pista en IndexedDB y se restauran al volver a cargarla.
+  const [hotCues, setHotCues] = useState(emptyHotCues);
+  // Loops guardados de la pista y cuál está seleccionado en la lista
+  const [savedLoops, setSavedLoops] = useState([]);
+  const [savedLoopIdx, setSavedLoopIdx] = useState(0);
+  // Loop activo
   const [loopIn, setLoopIn] = useState(null);
   const [loopOut, setLoopOut] = useState(null);
   const [loopOn, setLoopOn] = useState(false);
+  // Longitud del loop en BEATS cuando se conoce (automáticos, roll, doblar y
+  // partir). Con IN/OUT a mano es null y las cuentas van en segundos.
+  const [loopBeats, setLoopBeats] = useState(null);
+  // Loop roll en curso: { beats }. Mientras dura, el loop activo es el del
+  // roll y el que hubiera antes espera en rollRef para volver al soltar.
+  const [rolling, setRolling] = useState(null);
+  // Editor de nombre abierto: { kind: "cue" | "loop", index, value }
+  const [naming, setNaming] = useState(null);
+
+  // Longitud del loop para la UI: en beats cuando cuadra con la rejilla, en
+  // segundos cuando el IN/OUT se puso a mano fuera de ella.
+  const loopLabel =
+    loopIn != null && loopOut != null
+      ? loopBeats
+        ? `${beatsLabel(loopBeats)} \u266a`
+        : `${(loopOut - loopIn).toFixed(2)} s`
+      : "\u2014";
 
   // Fase de análisis para feedback en UI: null | "wave" | "bpm" | "regrid"
   const [analyzing, setAnalyzing] = useState(null);
@@ -464,9 +513,20 @@ function Deck({
     );
     applyGrid(hasManualGrid ? cached.bpm : null, hasManualGrid ? cached.gridAnchor : 0, hasManualGrid);
     setCuePoint(0);
-    setHotCues([null, null, null]);
-    setLoopIn(null);
-    setLoopOut(null);
+    // Hot cues y loops guardados de ESTA pista. Son del usuario: se restauran
+    // tal cual y el análisis no los toca nunca.
+    setHotCues(hotCuesToSlots(cached?.hotCues));
+    setSavedLoops(sanitizeSavedLoops(cached?.savedLoops));
+    setSavedLoopIdx(0);
+    // El último loop marcado vuelve donde estaba, pero APAGADO: al cargar una
+    // pista nadie espera que empiece a dar vueltas sola.
+    const cachedLoop = sanitizeLoopRegion(cached?.activeLoop);
+    rollRef.current = null;
+    setRolling(null);
+    setNaming(null);
+    setLoopIn(cachedLoop?.start ?? null);
+    setLoopOut(cachedLoop?.end ?? null);
+    setLoopBeats(cachedLoop?.beats ?? null);
     setLoopOn(false);
     cueManualRef.current = false;
     setAnalyzing("wave");
@@ -536,12 +596,19 @@ function Deck({
       bpm: tr.bpm,
       gridAnchor: tr.gridAnchor,
       gridManual: tr.gridManual,
+      hotCues: tr.hotCues,
+      savedLoops: tr.savedLoops,
+      activeLoop: tr.activeLoop,
     });
   }, [externalTrack?.loadToken, externalTrack?.file]);
 
   const onFile = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
+    // Este archivo no viene de la lista: se avisa al padre para que suelte el
+    // vínculo con la pista que hubiera cargada y no le escriba encima cues,
+    // loops ni rejilla de otra canción.
+    onLocalLoad?.(side);
     loadTrack(f);
     e.target.value = ""; // permite volver a elegir el mismo archivo
   };
@@ -636,19 +703,8 @@ function Deck({
 
   // === Quantize: imanta cues/loops/saltos al beat más cercano ===
   const [quantize, setQuantize] = useState(true);
-  const snapToGrid = (time) => {
-    if (!quantize || !beats.length) return time;
-    let best = time;
-    let bestD = Infinity;
-    for (const b of beats) {
-      const d = Math.abs(b - time);
-      if (d < bestD) {
-        bestD = d;
-        best = b;
-      }
-    }
-    return best;
-  };
+  const snapToGrid = (time) =>
+    quantize ? nearestBeat(beats, time) : time;
 
   // === Beat jump (estilo Traktor): salto de N beats adelante/atrás ===
   const [jumpBeats, setJumpBeats] = useState(4);
@@ -665,34 +721,57 @@ function Deck({
   };
 
   // === Hot cues ===
+  // Click fija (si está vacío) o salta; click derecho o Shift+click borra;
+  // doble click abre el editor de nombre.
   const triggerHotCue = (i) => {
     const el = audioRef.current;
     if (!el || !objectUrl) return;
-    const cueT = hotCues[i];
-    if (cueT == null) {
+    const cue = hotCues[i];
+    if (!cue) {
       const next = [...hotCues];
-      next[i] = snapToGrid(el.currentTime || 0);
+      next[i] = { t: snapToGrid(el.currentTime || 0), name: "" };
       setHotCues(next);
     } else {
-      el.currentTime = cueT;
-      setCurrent(cueT);
+      el.currentTime = cue.t;
+      setCurrent(cue.t);
     }
   };
 
   const clearHotCue = (i) => {
+    setNaming((n) => (n?.kind === "cue" && n.index === i ? null : n));
     setHotCues((prev) => {
+      if (!prev[i]) return prev;
       const next = [...prev];
       next[i] = null;
       return next;
     });
   };
 
+  const renameHotCue = (i, name) => {
+    setHotCues((prev) => {
+      if (!prev[i]) return prev;
+      const next = [...prev];
+      next[i] = { ...next[i], name: sanitizeName(name) };
+      return next;
+    });
+  };
+
   // === Loop ===
+  // Punto único por el que pasan TODOS los cambios de región del loop: así la
+  // longitud en beats y el motor del salto no se desincronizan nunca.
+  const applyLoop = (region, on) => {
+    setLoopIn(region?.start ?? null);
+    setLoopOut(region?.end ?? null);
+    setLoopBeats(region?.beats ?? null);
+    setLoopOn(Boolean(region && on));
+  };
+
   const setLoopInNow = () => {
     const el = audioRef.current;
     if (!el || !objectUrl) return;
     setLoopIn(snapToGrid(el.currentTime || 0));
     setLoopOut(null);
+    setLoopBeats(null);
     setLoopOn(false);
   };
 
@@ -704,7 +783,14 @@ function Deck({
     // si el snap lo dejaría pegado o antes del IN, usar el punto crudo
     const time = snapped > loopIn + 0.05 ? snapped : raw;
     if (time <= loopIn + 0.05) return;
+    // Longitud en beats solo si cuadra con la rejilla: es lo que permite
+    // después doblar y partir sin salirse de ella.
+    const beat = bpm > 0 ? 60 / bpm : null;
+    const enBeats = beat ? (time - loopIn) / beat : null;
+    const cuadra =
+      enBeats != null && Math.abs(enBeats - Math.round(enBeats * 32) / 32) < 1e-6;
     setLoopOut(time);
+    setLoopBeats(cuadra ? Math.round(enBeats * 32) / 32 : null);
     setLoopOn(true);
   };
 
@@ -715,46 +801,278 @@ function Deck({
   // Loop automático de N beats anclado al beat anterior más cercano
   const autoLoop = (nBeats) => {
     const el = audioRef.current;
-    if (!el || !bpm || !objectUrl) return;
-    const cur = el.currentTime || 0;
-    let start = cur;
-    for (let i = beats.length - 1; i >= 0; i--) {
-      if (beats[i] <= cur) {
-        start = beats[i];
-        break;
-      }
-    }
-    const end = start + nBeats * (60 / bpm);
-    if (duration && end > duration) return;
-    setLoopIn(start);
-    setLoopOut(end);
-    setLoopOn(true);
+    if (!el || !objectUrl) return;
+    const region = computeAutoLoop({
+      bpm,
+      beats,
+      time: el.currentTime || 0,
+      lengthBeats: nBeats,
+      duration: gridDuration,
+    });
+    if (region) applyLoop(region, true);
   };
 
-  // Forzar el loop mientras suena
-  useEffect(() => {
-    if (!loopOn || loopIn == null || loopOut == null) return;
-    let id;
-    const tick = () => {
-      const el = audioRef.current;
-      if (el && !el.paused && el.currentTime >= loopOut) {
-        el.currentTime = loopIn;
-        setCurrent(loopIn);
+  // Mueve el loop entero una longitud hacia delante o hacia atrás. Si está
+  // sonando dentro, el playhead se mueve con él y conserva su sitio relativo.
+  const moveLoopBy = (dir) => {
+    if (loopIn == null || loopOut == null) return;
+    const next = moveLoop({
+      start: loopIn,
+      end: loopOut,
+      dir,
+      duration: gridDuration,
+    });
+    if (!next) return;
+    const el = audioRef.current;
+    const cur = el?.currentTime ?? null;
+    setLoopIn(next.start);
+    setLoopOut(next.end);
+    if (el && loopOn && cur != null && cur >= loopIn && cur <= loopOut) {
+      const time = next.start + (cur - loopIn);
+      el.currentTime = time;
+      setCurrent(time);
+    }
+  };
+
+  // Dobla (2) o parte (0,5) la longitud manteniendo el punto de entrada
+  const resizeLoopBy = (factor) => {
+    if (loopIn == null || loopOut == null) return;
+    const next = resizeLoop({
+      start: loopIn,
+      end: loopOut,
+      factor,
+      bpm,
+      lengthBeats: loopBeats,
+      duration: gridDuration,
+    });
+    if (!next) return;
+    setLoopOut(next.end);
+    setLoopBeats(next.beats);
+    // Al partir, el playhead puede quedarse fuera del tramo nuevo: se le mete
+    // dentro por donde le tocaría, sin esperar a la siguiente vuelta.
+    const el = audioRef.current;
+    if (el && loopOn && !el.paused) {
+      const cur = el.currentTime || 0;
+      if (cur >= next.end) {
+        const time = wrapTime({ current: cur, start: next.start, end: next.end });
+        el.currentTime = time;
+        setCurrent(time);
       }
-      id = requestAnimationFrame(tick);
+    }
+  };
+
+  // === Loop roll ===
+  // Loop momentáneo mientras se mantiene pulsado. Al soltar, la reproducción
+  // sigue DONDE ESTARÍA si el roll no hubiera ocurrido (rollExitTime), no
+  // donde quedó el bucle.
+  const rollRef = useRef(null);
+
+  const startRoll = (lengthBeats) => {
+    const el = audioRef.current;
+    if (!el || !objectUrl || rollRef.current) return;
+    const region = rollLoop({
+      bpm,
+      gridAnchor,
+      time: el.currentTime || 0,
+      lengthBeats,
+      quantize,
+      duration: gridDuration,
+    });
+    if (!region) return;
+    rollRef.current = {
+      prev: { in: loopIn, out: loopOut, on: loopOn, beats: loopBeats },
+      length: region.end - region.start,
     };
-    id = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(id);
-  }, [loopOn, loopIn, loopOut]);
+    loopRef.current.wraps = 0;
+    applyLoop(region, true);
+    setRolling({ beats: lengthBeats });
+  };
+
+  const endRoll = () => {
+    const st = rollRef.current;
+    if (!st) return;
+    rollRef.current = null;
+    // Se apaga el motor a mano ANTES de recolocar el playhead: si no, el
+    // temporizador que aún está armado vería la posición de salida como un
+    // "pasado del OUT" y devolvería la pista al bucle.
+    loopRef.current.on = false;
+    const el = audioRef.current;
+    if (el) {
+      const exit = rollExitTime({
+        current: el.currentTime || 0,
+        wraps: loopRef.current.wraps,
+        loopLength: st.length,
+        duration: gridDuration || el.duration || 0,
+      });
+      el.currentTime = exit;
+      setCurrent(exit);
+    }
+    loopRef.current.wraps = 0;
+    setRolling(null);
+    applyLoop(
+      st.prev.in != null && st.prev.out != null
+        ? { start: st.prev.in, end: st.prev.out, beats: st.prev.beats }
+        : null,
+      st.prev.on
+    );
+  };
+
+  // === Loops guardados (por pista) ===
+  const saveCurrentLoop = () => {
+    if (loopIn == null || loopOut == null) return;
+    if (savedLoops.length >= MAX_SAVED_LOOPS) return;
+    const next = [
+      ...savedLoops,
+      {
+        id: nextLoopId(savedLoops),
+        start: loopIn,
+        end: loopOut,
+        beats: loopBeats,
+        // Nombre por defecto: la longitud en beats, que es lo que identifica
+        // un loop de un vistazo. Se puede cambiar con ✎.
+        name: loopBeats ? beatsLabel(loopBeats) : `L${savedLoops.length + 1}`,
+      },
+    ];
+    setSavedLoops(next);
+    setSavedLoopIdx(next.length - 1);
+  };
+
+  const recallSavedLoop = (idx = savedLoopIdx) => {
+    const loop = savedLoops[idx];
+    if (!loop) return;
+    applyLoop(loop, true);
+    setSavedLoopIdx(idx);
+    const el = audioRef.current;
+    if (el) {
+      el.currentTime = loop.start;
+      setCurrent(loop.start);
+    }
+  };
+
+  // Si ya está sonando ese mismo loop, la tecla lo apaga
+  const toggleSavedLoop = () => {
+    const loop = savedLoops[savedLoopIdx];
+    if (!loop) return;
+    if (loopOn && loopIn === loop.start && loopOut === loop.end) {
+      setLoopOn(false);
+      return;
+    }
+    recallSavedLoop(savedLoopIdx);
+  };
+
+  const deleteSavedLoop = (idx) => {
+    setNaming((n) => (n?.kind === "loop" ? null : n));
+    setSavedLoops((prev) => {
+      const next = prev.filter((_, i) => i !== idx);
+      setSavedLoopIdx((cur) => Math.max(0, Math.min(cur, next.length - 1)));
+      return next;
+    });
+  };
+
+  const renameSavedLoop = (idx, name) => {
+    setSavedLoops((prev) =>
+      prev.map((l, i) => (i === idx ? { ...l, name: sanitizeName(name) } : l))
+    );
+  };
+
+  const selectSavedLoop = (dir) => {
+    if (!savedLoops.length) return;
+    setSavedLoopIdx(
+      (i) => (i + dir + savedLoops.length) % savedLoops.length
+    );
+  };
+
+  // === Motor del loop ===
+  // Comprobar la posición una vez por frame deja 17 ms de margen: en un loop
+  // de 1/8 de beat (≈59 ms a 128 BPM) eso es casi un tercio de su longitud y
+  // el tropiezo se oye. Aquí se programa un temporizador para el instante del
+  // salto y solo en los últimos milisegundos se hila fino a base de ticks
+  // cortos. Además el retraso que quede se ARRASTRA al punto de entrada
+  // (wrapTime), así el bucle mantiene la fase aunque el aviso llegue tarde.
+  const loopRef = useRef({ on: false, start: 0, end: 0, wraps: 0, gen: 0 });
+  const loopActive = loopOn && loopIn != null && loopOut != null;
+  {
+    const st = loopRef.current;
+    const start = loopIn ?? 0;
+    const end = loopOut ?? 0;
+    if (st.start !== start || st.end !== end) {
+      st.start = start;
+      st.end = end;
+      st.wraps = 0;
+      st.gen++;
+    }
+    st.on = loopActive;
+  }
+
+  useEffect(() => {
+    if (!loopActive) return;
+    const el = audioRef.current;
+    if (!el) return;
+    const FINE_MS = 12; // tramo final que se apura con ticks cortos
+    const gen = loopRef.current.gen;
+    let timer = null;
+    let cancelled = false;
+
+    const tick = () => {
+      if (cancelled) return;
+      const st = loopRef.current;
+      if (st.gen !== gen) return; // manda otra región: este temporizador sobra
+      if (!st.on || el.paused) {
+        timer = setTimeout(tick, 60); // nada que vigilar por ahora
+        return;
+      }
+      const now = el.currentTime || 0;
+      if (now >= st.end) {
+        el.currentTime = wrapTime({ current: now, start: st.start, end: st.end });
+        st.wraps += 1;
+        timer = setTimeout(tick, 0);
+        return;
+      }
+      const rate = el.playbackRate || 1;
+      const remainMs = ((st.end - now) / rate) * 1000;
+      timer = setTimeout(tick, remainMs > FINE_MS ? remainMs - FINE_MS : 0);
+    };
+
+    tick();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [loopActive, loopIn, loopOut]);
+
+  // Los hot cues y los loops suben al padre, que los refleja en la lista y los
+  // guarda en IndexedDB. Sin pista cargada no hay nada que guardar.
+  const onCuesRef = useRef(onCues);
+  onCuesRef.current = onCues;
+  useEffect(() => {
+    if (!objectUrl) return;
+    onCuesRef.current?.(side, {
+      hotCues: slotsToHotCues(hotCues),
+      savedLoops,
+      // El loop del roll es momentáneo: no se guarda como el loop de la pista
+      activeLoop:
+        !rolling && loopIn != null && loopOut != null
+          ? { start: loopIn, end: loopOut, beats: loopBeats }
+          : undefined,
+    });
+  }, [hotCues, savedLoops, loopIn, loopOut, loopBeats, rolling, objectUrl, side]);
 
   // API imperativa para atajos de teclado (MiniDJPlayer)
   useImperativeHandle(ref, () => ({
     playPause: () => (isPlaying ? pause() : play()),
     cueStop: stop,
     hotCue: triggerHotCue,
+    hotCueClear: clearHotCue,
     loopIn: setLoopInNow,
     loopOut: setLoopOutNow,
     loopToggle: toggleLoop,
+    loopMove: moveLoopBy,
+    loopResize: resizeLoopBy,
+    rollStart: startRoll,
+    rollEnd: endRoll,
+    loopSave: saveCurrentLoop,
+    loopSavedToggle: toggleSavedLoop,
+    loopSavedSelect: selectSavedLoop,
     nudgeStart: (sign) => startBend(sign),
     nudgeEnd: () => releaseBend(),
   }));
@@ -1047,6 +1365,7 @@ function Deck({
                 loopIn={loopIn}
                 loopOut={loopOut}
                 loopOn={loopOn}
+                loopRolling={Boolean(rolling)}
                 audioRef={audioRef}
                 zoom={zoom}
                 scroll={scroll}
@@ -1178,45 +1497,53 @@ function Deck({
                 arriba hot cues + rejilla, abajo jump + loop */}
             <div className="flex flex-col gap-2 text-xs mt-1 pt-3 border-t border-neutral-800/70">
               <div className="flex flex-wrap items-stretch gap-2">
-              <Group label={t("hotCuesLabel")}>
-                {hotCues.map((cueT, i) => (
-                  <button
-                    key={i}
-                    onClick={(e) => {
-                      if (e.shiftKey) clearHotCue(i);
-                      else triggerHotCue(i);
+              {/* Ocho hot cues en dos filas de cuatro. El hueco está
+                  reservado aunque no haya ninguno puesto y cada pad tiene su
+                  línea de etiqueta siempre pintada, así que ni ponerles nombre
+                  ni cambiar de idioma mueve nada. */}
+              <Group label={t("hotCuesLabel")} className="relative">
+                <div className="grid grid-cols-4 gap-1">
+                  {hotCues.map((cue, i) => (
+                    <CuePad
+                      key={i}
+                      index={i}
+                      cue={cue}
+                      disabled={!objectUrl}
+                      onTrigger={() => triggerHotCue(i)}
+                      onClear={() => clearHotCue(i)}
+                      onRename={() =>
+                        setNaming({
+                          kind: "cue",
+                          index: i,
+                          value: cue?.name || "",
+                        })
+                      }
+                      title={
+                        cue
+                          ? t("hotCueGoTitle", {
+                              n: i + 1,
+                              time: calcDuration(cue.t),
+                            })
+                          : t("hotCueSetTitle", { n: i + 1 })
+                      }
+                    />
+                  ))}
+                </div>
+                {naming?.kind === "cue" && (
+                  <NameEditor
+                    label={t("hotCueNameLabel", { n: naming.index + 1 })}
+                    value={naming.value}
+                    okTitle={t("nameSaveTitle")}
+                    cancelTitle={t("nameCancelTitle")}
+                    placeholder={t("namePlaceholder")}
+                    onChange={(value) => setNaming((n) => ({ ...n, value }))}
+                    onCommit={() => {
+                      renameHotCue(naming.index, naming.value);
+                      setNaming(null);
                     }}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      clearHotCue(i);
-                    }}
-                    disabled={!objectUrl}
-                    className="w-7 h-7 rounded-lg border font-bold disabled:opacity-40"
-                    style={
-                      cueT != null
-                        ? {
-                            backgroundColor: HOT_CUE_COLORS[i],
-                            borderColor: HOT_CUE_COLORS[i],
-                            color: "#000",
-                          }
-                        : {
-                            backgroundColor: "rgb(38 38 38)",
-                            borderColor: "rgb(64 64 64)",
-                            color: "rgb(163 163 163)",
-                          }
-                    }
-                    title={
-                      cueT != null
-                        ? t("hotCueGoTitle", {
-                            n: i + 1,
-                            time: calcDuration(cueT),
-                          })
-                        : t("hotCueSetTitle", { n: i + 1 })
-                    }
-                  >
-                    {i + 1}
-                  </button>
-                ))}
+                    onCancel={() => setNaming(null)}
+                  />
+                )}
               </Group>
 
               <Group label={t("gridLabel")}>
@@ -1388,58 +1715,209 @@ function Deck({
               </Group>
 
               <Group label={t("loop")}>
+                <div className="flex flex-col gap-1">
+                  {/* Fila 1: marcar el loop a mano y loops automáticos */}
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      onClick={setLoopInNow}
+                      disabled={!objectUrl}
+                      className={`h-7 w-8 shrink-0 rounded-lg border text-[11px] font-semibold disabled:opacity-40 ${
+                        loopIn != null
+                          ? "bg-sky-500/30 border-sky-500/50 text-sky-300"
+                          : "bg-neutral-800 border-neutral-700 text-neutral-300"
+                      }`}
+                      title={t("loopInTitle")}
+                    >
+                      {t("loopIn")}
+                    </button>
+                    <button
+                      onClick={setLoopOutNow}
+                      disabled={!objectUrl || loopIn == null}
+                      className={`h-7 w-8 shrink-0 rounded-lg border text-[11px] font-semibold disabled:opacity-40 ${
+                        loopOut != null
+                          ? "bg-sky-500/30 border-sky-500/50 text-sky-300"
+                          : "bg-neutral-800 border-neutral-700 text-neutral-300"
+                      }`}
+                      title={t("loopOutTitle")}
+                    >
+                      {t("loopOut")}
+                    </button>
+                    <button
+                      onClick={toggleLoop}
+                      disabled={loopIn == null || loopOut == null}
+                      className={`w-7 h-7 shrink-0 rounded-lg border font-semibold disabled:opacity-40 ${
+                        loopOn
+                          ? "bg-emerald-500 border-emerald-400 text-black"
+                          : "bg-neutral-800 border-neutral-700 text-neutral-300"
+                      }`}
+                      title={t("loopToggleTitle")}
+                    >
+                      ⟳
+                    </button>
+                    <span className="w-px h-5 bg-neutral-800 mx-0.5" />
+                    {AUTO_LOOP_SIZES.map((n) => (
+                      <GridBtn
+                        key={n}
+                        onClick={() => autoLoop(n)}
+                        disabled={!objectUrl || !bpm}
+                        title={t("loopAutoTitle", { n })}
+                      >
+                        {n}
+                      </GridBtn>
+                    ))}
+                  </div>
+                  {/* Fila 2: mover el loop y doblar/partir su longitud.
+                      A la derecha, la longitud actual en beats. */}
+                  <div className="flex items-center gap-0.5">
+                    <GridBtn
+                      onClick={() => moveLoopBy(-1)}
+                      disabled={!loopOut}
+                      title={t("loopMoveBackTitle")}
+                    >
+                      «
+                    </GridBtn>
+                    <GridBtn
+                      onClick={() => moveLoopBy(1)}
+                      disabled={!loopOut}
+                      title={t("loopMoveFwdTitle")}
+                    >
+                      »
+                    </GridBtn>
+                    <span className="w-px h-5 bg-neutral-800 mx-0.5" />
+                    <GridBtn
+                      onClick={() => resizeLoopBy(0.5)}
+                      disabled={!loopOut}
+                      title={t("loopHalveTitle")}
+                    >
+                      ÷2
+                    </GridBtn>
+                    <GridBtn
+                      onClick={() => resizeLoopBy(2)}
+                      disabled={!loopOut}
+                      title={t("loopDoubleTitle")}
+                    >
+                      ×2
+                    </GridBtn>
+                    <span
+                      className="ml-auto pl-1.5 w-12 shrink-0 text-right text-[10px] text-neutral-400 tabular-nums"
+                      title={t("loopLengthTitle")}
+                    >
+                      {loopLabel}
+                    </span>
+                  </div>
+                </div>
+              </Group>
+              </div>
+
+              <div className="flex flex-wrap items-stretch gap-2">
+              {/* Loop roll: bucle momentáneo mientras se mantiene pulsado. Al
+                  soltar, la pista sigue donde estaría sin el roll. */}
+              <Group label={t("rollLabel")}>
+                {ROLL_SIZES.map((n) => (
+                  <button
+                    key={n}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      // La captura garantiza recibir el "soltar" aunque el
+                      // puntero se salga del pad. Si el navegador no la da,
+                      // el roll funciona igual.
+                      try {
+                        e.currentTarget.setPointerCapture?.(e.pointerId);
+                      } catch {
+                        // puntero no capturable
+                      }
+                      startRoll(n);
+                    }}
+                    onPointerUp={endRoll}
+                    onPointerCancel={endRoll}
+                    onLostPointerCapture={endRoll}
+                    disabled={!objectUrl || !bpm}
+                    className={`w-8 h-7 shrink-0 grid place-items-center rounded-lg border text-[10px] font-bold leading-none disabled:opacity-40 ${
+                      rolling?.beats === n
+                        ? "bg-amber-400 border-amber-300 text-black"
+                        : "bg-neutral-800 border-neutral-700 text-neutral-300"
+                    }`}
+                    title={t("rollSizeTitle", { n: beatsLabel(n) })}
+                  >
+                    {beatsLabel(n)}
+                  </button>
+                ))}
+              </Group>
+
+              {/* Loops guardados de la pista: se guardan con la pista y siguen
+                  ahí al recargar la app. */}
+              <Group label={t("savedLoopsLabel")} className="relative">
                 <button
-                  onClick={setLoopInNow}
-                  disabled={!objectUrl}
-                  className={`h-7 px-2 rounded-lg border disabled:opacity-40 ${
-                    loopIn != null
-                      ? "bg-sky-500/30 border-sky-500/50 text-sky-300"
-                      : "bg-neutral-800 border-neutral-700 text-neutral-300"
-                  }`}
-                  title={t("loopInTitle")}
+                  onClick={saveCurrentLoop}
+                  disabled={
+                    loopIn == null ||
+                    loopOut == null ||
+                    savedLoops.length >= MAX_SAVED_LOOPS
+                  }
+                  className="w-7 h-7 shrink-0 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-bold disabled:opacity-40"
+                  title={t("savedLoopSaveTitle")}
                 >
-                  {t("loopIn")}
+                  +
                 </button>
-                <button
-                  onClick={setLoopOutNow}
-                  disabled={!objectUrl || loopIn == null}
-                  className={`h-7 px-2 rounded-lg border disabled:opacity-40 ${
-                    loopOut != null
-                      ? "bg-sky-500/30 border-sky-500/50 text-sky-300"
-                      : "bg-neutral-800 border-neutral-700 text-neutral-300"
-                  }`}
-                  title={t("loopOutTitle")}
+                <select
+                  value={savedLoops.length ? savedLoopIdx : ""}
+                  onChange={(e) => setSavedLoopIdx(Number(e.target.value))}
+                  disabled={!savedLoops.length}
+                  className="h-7 w-20 shrink-0 bg-neutral-800 border border-neutral-700 rounded-lg px-1 disabled:opacity-40"
+                  title={t("savedLoopSelectTitle")}
                 >
-                  {t("loopOut")}
-                </button>
-                <button
-                  onClick={() => autoLoop(4)}
-                  disabled={!objectUrl || !bpm}
-                  className="w-7 h-7 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 disabled:opacity-40"
-                  title={t("loop4Title")}
-                >
-                  4
-                </button>
-                <button
-                  onClick={() => autoLoop(8)}
-                  disabled={!objectUrl || !bpm}
-                  className="w-7 h-7 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 disabled:opacity-40"
-                  title={t("loop8Title")}
-                >
-                  8
-                </button>
-                <button
-                  onClick={toggleLoop}
-                  disabled={loopIn == null || loopOut == null}
-                  className={`w-7 h-7 rounded-lg border font-semibold disabled:opacity-40 ${
-                    loopOn
-                      ? "bg-emerald-500 border-emerald-400 text-black"
-                      : "bg-neutral-800 border-neutral-700 text-neutral-300"
-                  }`}
-                  title={t("loopToggleTitle")}
+                  {savedLoops.length === 0 ? (
+                    <option value="">{t("savedLoopsNone")}</option>
+                  ) : (
+                    savedLoops.map((l, i) => (
+                      <option key={l.id} value={i}>
+                        {l.name || `L${i + 1}`}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <GridBtn
+                  onClick={() => recallSavedLoop()}
+                  disabled={!savedLoops.length}
+                  title={t("savedLoopRecallTitle")}
                 >
                   ⟳
-                </button>
+                </GridBtn>
+                <GridBtn
+                  onClick={() =>
+                    setNaming({
+                      kind: "loop",
+                      index: savedLoopIdx,
+                      value: savedLoops[savedLoopIdx]?.name || "",
+                    })
+                  }
+                  disabled={!savedLoops.length}
+                  title={t("savedLoopRenameTitle")}
+                >
+                  ✎
+                </GridBtn>
+                <GridBtn
+                  onClick={() => deleteSavedLoop(savedLoopIdx)}
+                  disabled={!savedLoops.length}
+                  title={t("savedLoopDeleteTitle")}
+                >
+                  ✕
+                </GridBtn>
+                {naming?.kind === "loop" && (
+                  <NameEditor
+                    label={t("savedLoopNameLabel")}
+                    value={naming.value}
+                    okTitle={t("nameSaveTitle")}
+                    cancelTitle={t("nameCancelTitle")}
+                    placeholder={t("namePlaceholder")}
+                    onChange={(value) => setNaming((n) => ({ ...n, value }))}
+                    onCommit={() => {
+                      renameSavedLoop(naming.index, naming.value);
+                      setNaming(null);
+                    }}
+                    onCancel={() => setNaming(null)}
+                  />
+                )}
               </Group>
               </div>
             </div>
@@ -1525,9 +2003,11 @@ function Deck({
 export default memo(Deck);
 
 // Grupo de herramientas del deck: etiqueta pequeña + botones en una caja
-function Group({ label, children }) {
+function Group({ label, className = "", children }) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900/40 px-2 py-1 min-w-0">
+    <div
+      className={`flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900/40 px-2 py-1 min-w-0 ${className}`}
+    >
       <Tiny className="text-[9px]">{label}</Tiny>
       <div className="flex items-center gap-1">{children}</div>
     </div>
@@ -1570,5 +2050,94 @@ function GridBtn({ onClick, disabled, title, className = "", children }) {
     >
       {children}
     </button>
+  );
+}
+
+// Pad de hot cue. Ancho y alto FIJOS, y la línea de la etiqueta se pinta
+// siempre (aunque esté vacía): así ponerle nombre a un cue —o cambiar de
+// idioma— no mueve nada de sitio.
+//
+// Click fija o salta · click derecho o Shift+click borra · doble click abre el
+// editor de nombre.
+function CuePad({ index, cue, disabled, onTrigger, onClear, onRename, title }) {
+  const color = HOT_CUE_COLORS[index] || "#ffffff";
+  return (
+    <button
+      onClick={(e) => (e.shiftKey ? onClear() : onTrigger())}
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        if (cue) onRename();
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onClear();
+      }}
+      disabled={disabled}
+      title={title}
+      className="w-12 h-9 shrink-0 grid content-center overflow-hidden rounded-lg border leading-none disabled:opacity-40"
+      style={
+        cue
+          ? { backgroundColor: color, borderColor: color, color: "#000" }
+          : {
+              backgroundColor: "rgb(38 38 38)",
+              borderColor: "rgb(64 64 64)",
+              color: "rgb(163 163 163)",
+            }
+      }
+    >
+      <span className="text-[11px] font-bold">{index + 1}</span>
+      <span className="px-0.5 text-[8px] truncate opacity-80">
+        {cue?.name || "\u00A0"}
+      </span>
+    </button>
+  );
+}
+
+// Editor de etiqueta de un cue o de un loop guardado. Va FLOTANDO sobre su
+// caja (absolute), así abrirlo no empuja el resto de la interfaz.
+// Enter confirma, Esc cancela.
+function NameEditor({
+  label,
+  value,
+  placeholder,
+  okTitle,
+  cancelTitle,
+  onChange,
+  onCommit,
+  onCancel,
+}) {
+  return (
+    <div className="absolute left-0 top-full z-20 mt-1 flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-900 p-1 shadow-xl">
+      <span className="text-[9px] whitespace-nowrap text-neutral-400">
+        {label}
+      </span>
+      <input
+        autoFocus
+        value={value}
+        maxLength={CUE_NAME_MAX}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") onCommit();
+          else if (e.key === "Escape") onCancel();
+        }}
+        className="w-24 rounded border border-neutral-700 bg-neutral-800 px-1 py-0.5 text-[11px]"
+      />
+      <button
+        onClick={onCommit}
+        title={okTitle}
+        className="w-6 h-6 shrink-0 grid place-items-center rounded border border-emerald-500/60 bg-emerald-500/20 text-[11px] text-emerald-300"
+      >
+        ✓
+      </button>
+      <button
+        onClick={onCancel}
+        title={cancelTitle}
+        className="w-6 h-6 shrink-0 grid place-items-center rounded border border-neutral-700 bg-neutral-800 text-[11px] text-neutral-300"
+      >
+        ✕
+      </button>
+    </div>
   );
 }

@@ -59,8 +59,11 @@ export default {
   bendMinusTitle: "Bend − (slower while held)",
   bendPlusTitle: "Bend + (faster while held)",
   hotCueSetTitle: "Hot cue {n}: set at the current position",
-  hotCueGoTitle:
-    "Hot cue {n}: jump to {time} · clear with right-click or Shift+click",
+  hotCueGoTitle: "Hot cue {n}: jump to {time} · clear with right-click or Shift+click · double-click to name it",
+  hotCueNameLabel: "Cue {n} name",
+  namePlaceholder: "drop, vocal…",
+  nameSaveTitle: "Save the name (Enter)",
+  nameCancelTitle: "Cancel (Esc)",
   jump: "Jump",
   hotCuesLabel: "Hot cues",
   gridLabel: "Grid",
@@ -93,8 +96,22 @@ export default {
   loopInTitle: "Sets the loop start at the current position",
   loopOut: "OUT",
   loopOutTitle: "Sets the loop end and activates it",
-  loop4Title: "Automatic 4-beat loop from the previous beat",
-  loop8Title: "Automatic 8-beat loop from the previous beat",
+  loopAutoTitle: "Automatic {n}-beat loop from the previous beat",
+  loopMoveBackTitle: "Moves the loop one length backwards, keeping its size",
+  loopMoveFwdTitle: "Moves the loop one length forwards, keeping its size",
+  loopHalveTitle: "Halves the loop length, staying on the grid",
+  loopDoubleTitle: "Doubles the loop length, staying on the grid",
+  loopLengthTitle: "Loop length in beats (in seconds when the IN/OUT is off the grid)",
+  rollLabel: "Roll",
+  rollSizeTitle: "{n}-beat loop roll while held. On release, playback continues where it would be if the roll had never happened",
+  savedLoopsLabel: "Loops",
+  savedLoopsNone: "no loops",
+  savedLoopSaveTitle: "Saves the active loop on this track",
+  savedLoopSelectTitle: "Saved loop",
+  savedLoopRecallTitle: "Recalls the saved loop and turns it on",
+  savedLoopRenameTitle: "Renames the saved loop",
+  savedLoopDeleteTitle: "Deletes the saved loop",
+  savedLoopNameLabel: "Loop name",
   loopToggleTitle: "Turns the marked loop on/off",
 
   // Mixer
@@ -201,8 +218,7 @@ export default {
   analysisDeck: "Only when loaded into a deck",
 
   // Footer
-  shortcuts:
-    "Keyboard (active deck: Q=A, P=B or click the deck) — Space: play/pause · C: cue/stop · 1-3: hot cues · I/O: loop in/out · L: loop on/off · ←/→: nudge",
+  shortcuts: "Keyboard (active deck: Q=A, P=B or click the deck) — Space: play/pause · C: cue/stop · 1-8: hot cues (Shift: clear) · I/O: loop in/out · L: loop on/off · A S D F G H: loop roll 1/8-4 · [ ]: move the loop · − =: halve/double · R: save loop (Shift: recall it) · , .: pick saved loop · ←/→: nudge",
   // Settings tabs, load lock and level meters
   tabAudio: "Audio",
   tabLibrary: "Library",

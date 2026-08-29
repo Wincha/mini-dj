@@ -129,9 +129,10 @@ describe('ajustes', () => {
     const { onConfigChange } = abrir()
     await irA(user, t('tabDisplay'))
 
-    expect(screen.getByLabelText(t('vuModeContinuous'))).toBeChecked()
-    await user.click(screen.getByLabelText(t('vuModeLed')))
-    expect(onConfigChange).toHaveBeenCalledWith({ vuMode: 'led' })
+    // Por defecto, LED: es lo que se parece a una mesa de verdad
+    expect(screen.getByLabelText(t('vuModeLed'))).toBeChecked()
+    await user.click(screen.getByLabelText(t('vuModeContinuous')))
+    expect(onConfigChange).toHaveBeenCalledWith({ vuMode: 'continuous' })
   })
 
   it('cada cambio manda la configuración ENTERA, no solo la clave tocada', async () => {

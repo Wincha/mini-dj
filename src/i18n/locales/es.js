@@ -60,8 +60,11 @@ export default {
   bendMinusTitle: "Bend − (más lento mientras mantienes)",
   bendPlusTitle: "Bend + (más rápido mientras mantienes)",
   hotCueSetTitle: "Hot cue {n}: fijar en la posición actual",
-  hotCueGoTitle:
-    "Hot cue {n}: saltar a {time} · borrar con click derecho o Shift+click",
+  hotCueGoTitle: "Hot cue {n}: saltar a {time} · borrar con click derecho o Shift+click · doble click para ponerle nombre",
+  hotCueNameLabel: "Nombre del cue {n}",
+  namePlaceholder: "drop, voz…",
+  nameSaveTitle: "Guardar el nombre (Enter)",
+  nameCancelTitle: "Cancelar (Esc)",
   jump: "Jump",
   hotCuesLabel: "Hot cues",
   gridLabel: "Rejilla",
@@ -94,8 +97,22 @@ export default {
   loopInTitle: "Marca el inicio del loop en la posición actual",
   loopOut: "OUT",
   loopOutTitle: "Marca el final del loop y lo activa",
-  loop4Title: "Loop automático de 4 beats desde el beat anterior",
-  loop8Title: "Loop automático de 8 beats desde el beat anterior",
+  loopAutoTitle: "Loop automático de {n} beats desde el beat anterior",
+  loopMoveBackTitle: "Mueve el loop una longitud hacia atrás, sin cambiar su tamaño",
+  loopMoveFwdTitle: "Mueve el loop una longitud hacia delante, sin cambiar su tamaño",
+  loopHalveTitle: "Parte la longitud del loop por la mitad, respetando la rejilla",
+  loopDoubleTitle: "Dobla la longitud del loop, respetando la rejilla",
+  loopLengthTitle: "Longitud del loop en beats (en segundos si el IN/OUT no cuadra con la rejilla)",
+  rollLabel: "Roll",
+  rollSizeTitle: "Loop roll de {n} beats mientras mantienes pulsado. Al soltar, la pista sigue donde estaría si el roll no hubiera ocurrido",
+  savedLoopsLabel: "Loops",
+  savedLoopsNone: "sin loops",
+  savedLoopSaveTitle: "Guarda el loop activo en la pista",
+  savedLoopSelectTitle: "Loop guardado",
+  savedLoopRecallTitle: "Recupera el loop guardado y lo activa",
+  savedLoopRenameTitle: "Cambia el nombre del loop guardado",
+  savedLoopDeleteTitle: "Borra el loop guardado",
+  savedLoopNameLabel: "Nombre del loop",
   loopToggleTitle: "Activa/desactiva el loop marcado",
 
   // Mixer
@@ -203,8 +220,7 @@ export default {
   analysisDeck: "Solo al cargarlas en un deck",
 
   // Pie
-  shortcuts:
-    "Teclado (deck activo: Q=A, P=B o click en el deck) — Espacio: play/pausa · C: cue/stop · 1-3: hot cues · I/O: loop in/out · L: loop on/off · ←/→: nudge",
+  shortcuts: "Teclado (deck activo: Q=A, P=B o click en el deck) — Espacio: play/pausa · C: cue/stop · 1-8: hot cues (Shift: borrar) · I/O: loop in/out · L: loop on/off · A S D F G H: loop roll 1/8-4 · [ ]: mover el loop · − =: partir/doblar · R: guardar loop (Shift: activarlo) · , .: elegir loop guardado · ←/→: nudge",
   // Pestañas de configuración, bloqueo de carga y VU
   tabAudio: "Audio",
   tabLibrary: "Biblioteca",

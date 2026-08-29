@@ -2,6 +2,11 @@
 // Los File son clonables estructuralmente, así que se guardan tal cual.
 
 import { ERRORS, logError } from "./log";
+import {
+  sanitizeHotCues,
+  sanitizeLoopRegion,
+  sanitizeSavedLoops,
+} from "./cuePoints";
 
 const DB_NAME = "mini-dj";
 const STORE = "tracks";
@@ -67,6 +72,12 @@ export async function storeTrack(track) {
       metaRead = false,
       musicalKey = null,
       analyzed = false,
+      // Hot cues y loops: son del USUARIO. Se guardan en forma compacta (solo
+      // lo que ha puesto) para que subir el número de cues no obligue a migrar
+      // lo ya guardado. Ver src/lib/cuePoints.js.
+      hotCues = [],
+      savedLoops = [],
+      activeLoop = null,
     } = track;
     await withStore("readwrite", (s) =>
       s.put({
@@ -86,6 +97,9 @@ export async function storeTrack(track) {
         metaRead,
         musicalKey,
         analyzed,
+        hotCues: sanitizeHotCues(hotCues),
+        savedLoops: sanitizeSavedLoops(savedLoops),
+        activeLoop: sanitizeLoopRegion(activeLoop),
       })
     );
   } catch (err) {
@@ -107,6 +121,9 @@ export async function removeStoredTrack(id) {
  * Regla: un ajuste MANUAL de rejilla no lo pisa nunca el análisis automático.
  * De una pista con `gridManual` solo se aceptan la duración y la tonalidad; el
  * BPM y el ancla se quedan como los dejó el usuario.
+ *
+ * Los hot cues y los loops son del usuario SIEMPRE: el análisis no los toca en
+ * ningún caso (aquí viajan intactos dentro de `...track`).
  */
 export function mergeTrackAnalysis(track, { bpm, gridAnchor, duration, musicalKey } = {}) {
   if (track?.gridManual) {

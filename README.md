@@ -8,11 +8,14 @@ Two‑deck DJ app built with React, Vite and Tailwind — everything runs locall
 - Transport (play/pause/stop), elapsed/remaining toggle, smooth seeking, and per‑deck key lock (`preservesPitch`): keep the musical key while changing tempo; off = vinyl mode.
 - Pitch fader like a Technics turntable (up = slower, down = faster) with selectable range (±8/16/50%) and momentary pitch‑bend buttons; live BPM readout reflects tempo changes.
 - CUE points: positioning the track while paused sets the cue; Stop returns to it. Auto‑cue lands on the first sound / first detected beat (orange marker on the waveform).
-- 3 hot cues per deck (right‑click or Shift+click clears) and loops: manual IN/OUT plus auto 4/8‑beat loops snapped to the beat grid, drawn on the waveform.
+- 8 named hot cues per deck (right‑click or Shift+click clears, double‑click names them) drawn on the waveform with their label; the pads reserve their space, so naming a cue never shifts the layout.
+- Loops: manual IN/OUT, auto 4/8/16‑beat loops on the grid, move the loop back/forward by its own length, halve/double its length, and **loop rolls** (1/8 – 4 beats) while you hold the pad — on release playback continues where it would be if the roll had never happened. Loops are timed with a scheduled jump (not a per‑frame check) and the leftover latency is carried into the loop start, so even a 1/8‑beat loop keeps its phase.
+- Saved loops per track: store several with a name, recall and arm them from the deck.
+- Hot cues and loops are saved with the track in IndexedDB and restored when you load it again, in this session or after restarting the app. They belong to the user: no re‑analysis or reload ever overwrites them, and deleting the track from the crate deletes them with it.
 - Traktor‑style beat jump: selectable size (1–32 beats) with « / » to jump backward or forward.
-- Quantize (Q, on by default): hot cues, loop in/out and beat jumps snap to the nearest grid beat.
+- Quantize (Q, on by default): hot cues, loop in/out, loop rolls and beat jumps snap to the grid — rolls to the subdivision of their own size.
 - Grid TAP: tap the TAP button (or the BPM display) on the beats while the track plays — each tap re‑anchors the beat grid in real time and several taps recompute the BPM. Taps are measured in track time, so pitch doesn't skew the result.
-- Manual beat‑grid editing, both axes: `« ‹ › »` shift the grid anchor (10 ms / 1 ms) when the grid is out of phase with the hits, and `−− − + ++` stretch or squeeze the spacing between beats (±0.1 / ±0.01 BPM) pivoting on the anchor, for a grid that starts square and drifts. `÷2` / `×2` fix a tempo detected at half or double, and `⟳` re‑runs the detection *around* the BPM and anchor you set by hand instead of from scratch. All of it changes the track's **base BPM**, never the pitch, and every change propagates at once to waveform markers, quantize, auto 4/8‑beat loops, beat jump, the beat‑match panel and the BPM feeding SYNC.
+- Manual beat‑grid editing, both axes: `« ‹ › »` shift the grid anchor (10 ms / 1 ms) when the grid is out of phase with the hits, and `−− − + ++` stretch or squeeze the spacing between beats (±0.1 / ±0.01 BPM) pivoting on the anchor, for a grid that starts square and drifts. `÷2` / `×2` fix a tempo detected at half or double, and `⟳` re‑runs the detection *around* the BPM and anchor you set by hand instead of from scratch. All of it changes the track's **base BPM**, never the pitch, and every change propagates at once to waveform markers, quantize, auto loops and rolls, beat jump, the beat‑match panel and the BPM feeding SYNC.
 - Waveform: zoom (buttons or mouse wheel), follow mode, manual scroll, click‑to‑seek, beat markers, cue/hot‑cue/loop overlays. Vinyl‑style dragging: while paused, push the wave to position the track under the playhead; while playing, dragging nudges the tempo like a pitch bend.
 - Analysis feedback over the waveform ("Analizando pista…", "Detectando BPM…").
 
@@ -29,11 +32,11 @@ Two‑deck DJ app built with React, Vite and Tailwind — everything runs locall
 
 ### Library
 - Track list (crate): add multiple songs, load them to Deck A/B with one click, badges showing what's loaded where and (in gray) where each song was already played.
-- Persists in IndexedDB across reloads (including a hand‑adjusted beat grid, which the background analysis never overwrites); BPM/duration analyzed slowly in the background (idle time, one at a time) or only on deck load (configurable).
+- Persists in IndexedDB across reloads (including a hand‑adjusted beat grid, hot cues and saved loops, which the background analysis never overwrites); BPM/duration analyzed slowly in the background (idle time, one at a time) or only on deck load (configurable).
 - Search box, sorting by name/BPM/duration, and CSV export.
 
 ### Extras
-- Keyboard shortcuts on the active deck (click a deck or Q/P to switch): Space play/pause, C cue/stop, 1‑3 hot cues, I/O loop in/out, L loop toggle, ←/→ nudge.
+- Keyboard shortcuts on the active deck (click a deck or Q/P to switch): Space play/pause, C cue/stop, 1‑8 hot cues (Shift+n clears), I/O loop in/out, L loop toggle, A S D F G H loop roll (1/8 – 4 beats, while held), `[` `]` move the loop, `-` `=` halve/double it, R save the loop (Shift+R arms the saved one), `,` `.` pick a saved loop, ←/→ nudge.
 - Config dialog (⚙): pick the sound card/output for the master mix, the headphone cue, and optionally a dedicated output per deck (external‑mixer mode); choose the track‑analysis mode.
 - **11 languages** (Spanish, English, Catalan, Galician, Basque, French, Italian, Portuguese, Chinese, Japanese, Korean), auto‑detected from the browser with English as fallback and a selector under the title; the choice is remembered.
 - Responsive layout down to phone widths (decks stack, mixer moves below); Dark Reader–friendly. Controls reserve stable widths so translated or changing labels never shift the layout.

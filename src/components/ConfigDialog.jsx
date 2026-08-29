@@ -284,7 +284,7 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
               <input
                 type="radio"
                 name="vuMode"
-                checked={(config.vuMode || "continuous") === opt.value}
+                checked={(config.vuMode || "led") === opt.value}
                 onChange={() => set("vuMode", opt.value)}
                 className="accent-emerald-500"
               />
