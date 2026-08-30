@@ -7,7 +7,7 @@ export default {
   masterSync: "MASTER SYNC",
   masterSyncTitle:
     "Master sync: els decks amb SYNC segueixen aquest BPM en lloc de l'altre deck",
-  masterBpmTitle: "BPM del master sync",
+  masterBpmTitle: "BPM del master sync. Prem a sobre i arrossega amunt o avall, o gira la roda, per ajustar-lo sense teclejar (amb Shift, més fi)",
   bpm: "BPM",
   language: "Idioma",
 
@@ -37,8 +37,6 @@ export default {
   updateChecking: "Comprovant actualitzacions…",
   updateUpToDate: "Ja tens la darrera versió",
   updateError: "No s'han pogut comprovar les actualitzacions",
-  follow: "🔁 Segueix",
-  followTitle: "Tornar a seguir la reproducció",
   play: "▶︎ Play",
   pause: "❚❚ Pausa",
   stop: "■ Stop",
@@ -173,7 +171,6 @@ export default {
   keyCompatibleTitle: "Compatible amb la pista que sona",
   keyClashTitle: "No encaixa amb la tonalitat de la pista que sona",
   keyLegend: "Sona en {key}: en morat, les pistes harmònicament compatibles.",
-  noArtworkTitle: "Sense caràtula",
   showArtwork: "Caràtules",
   showArtworkTitle: "Mostra o amaga les miniatures de caràtula",
   showArtworkNote: "Amagar-les guanya espai a la pantalla; les caràtules es continuen desant.",
@@ -239,4 +236,87 @@ export default {
   logClear: "Buida",
   logFile: "A l'app d'escriptori també es desa a: {path}",
   versionTitle: "Versió de Mini DJ",
+
+  // Estructura de la pista y aviso de fin
+  structureLabel: "Estructura",
+  phraseBackCoarseTitle: "Endarrereix la frase {n} kicks",
+  phraseBackFineTitle: "Endarrereix la frase 1 kick",
+  phraseFwdFineTitle: "Avança la frase 1 kick",
+  phraseFwdCoarseTitle: "Avança la frase {n} kicks",
+  phraseSizeTitle: "Mida de la frase en kicks. És el mateix ajust que hi ha a ⚙ Configuració",
+  structureRedetectTitle: "Torna a detectar l'estructura sobre la graella actual, respectant el desplaçament de frase que hagis posat a mà",
+  phraseResetTitle: "Torna el desplaçament de frase al que va trobar l'anàlisi",
+  phraseOffsetTitle: "Desplaçament de frase actual, en kicks. En ambre quan l'has posat tu a mà",
+  structureTipInKick: "Ets a la part amb ritme.",
+  structureTipInBreak: "Ets en una baixada.",
+  structureTipDrop: "La baixada entra d'aquí a {n} kicks.",
+  structureTipDropBars: "La baixada entra d'aquí a {n} kicks ({bars} compassos).",
+  structureTipRise: "El ritme torna d'aquí a {n} kicks.",
+  structureTipRiseBars: "El ritme torna d'aquí a {n} kicks ({bars} compassos).",
+  structureTipRiseAfter: "El ritme torna {n} kicks després.",
+  structureTipDropAfter: "La baixada entra {n} kicks després.",
+  structureTipNoChanges: "No hi ha més canvis fins al final de la pista.",
+  structureTipToEnd: "La pista s'acaba d'aquí a {n} kicks.",
+  structureTipPhrase: "Vas pel kick {pos} d'una frase de {size}.",
+  structureHeading: "Indicador d'estructura",
+  showStructure: "Mostra l'indicador sobre l'ona",
+  structureNote: "Compta els kicks que falten perquè marxi el ritme (▼) i perquè torni (▲), i per on vas dins de la frase. S'analitza un sol cop en carregar la pista.",
+  phraseSizeLabel: "Mida de frase",
+  structureUnitLabel: "Comptar en",
+  unitKicks: "Kicks",
+  unitBars: "Compassos",
+  warnAmberLabel: "Avís ambre (kicks)",
+  warnRedLabel: "Avís vermell (kicks)",
+  endWarnHeading: "Avís de final de pista",
+  endWarnOn: "Avisa quan la pista s'està acabant",
+  endWarnNote: "La vora de l'ona parpelleja en vermell, cada cop més insistent. Només amb la pista sonant, i quieta si tens posat el moviment reduït del sistema.",
+  endWarnModeLabel: "Avisar per",
+  endWarnModeSeconds: "Segons restants",
+  endWarnModePercent: "Percentatge restant",
+  endWarnValueSeconds: "Segons",
+  endWarnValuePercent: "% de la pista",
+
+  // Pitch (rango del fader y fuerza del bend)
+  pitchHeading: "Pitch",
+  bendRangeLabel: "Força del pitch bend",
+  pitchNote: "Valen per als dos decks. El rang és el de partida: si el SYNC necessita més recorregut l'eixampla ell sol, sense tocar això. La força del bend és el que estiren els botons − i + del deck.",
+  masterBpmDownTitle: "Baixa 1 el BPM del màster",
+  masterBpmUpTitle: "Puja 1 el BPM del màster",
+
+  // Pestañas de herramientas del deck
+  toolsPosition: "Posició",
+  toolsBpm: "BPM",
+  toolsLoops: "Loops i rolls",
+
+  // Cabecera y formato de archivo de la lista
+  colDeck: "Deck",
+  noArtworkFormatTitle: "Sense caràtula · fitxer {format}",
+
+  // Resumen de la pista
+  overviewTitle: "Resum de la pista: prem o arrossega per moure't. Els trams foscos són les baixades; la línia vermella marca on marxa el ritme i la verda on torna",
+
+  // Pantalla LCD del deck
+  lcdElapsed: "Transcorregut",
+  lcdRemaining: "Restant",
+  lcdTotal: "Total",
+  lcdTrackBpm: "BPM pista",
+  lcdKey: "To",
+  lcdTimeTitle: "Temps de la pista. Prem per alternar entre el transcorregut i el que queda",
+
+  // Marquesina del nombre de la pista
+  marqueeSpeedLabel: "Marquesina",
+  marqueeOff: "Quieta",
+  marqueeSlow: "Lenta",
+  marqueeNormal: "Normal",
+  marqueeFast: "Ràpida",
+  marqueeNote: "Quan el nom no cap a la pantalla del deck, passa de llarg en bucle. L'animació la fa el navegador, no costa CPU. Amb el moviment reduït del sistema es queda quieta.",
+
+  // Pantalla del deck: cifras redondeadas o de 14 segmentos
+  lcdHeading: "Pantalla del deck",
+  lcdFontLabel: "Xifres",
+  lcdFontRounded: "Arrodonides",
+  lcdFontNote: "El títol en matriu de 5 x 7 punts i les xifres (temps, BPM, pitch…) amb el muntatge fix d'una pantalla de debò: set segments on només van nombres i catorze on cal un signe. Ocupa el mateix que amb les lletres normals: canviar no descol·loca res.",
+  titleFontLabel: "Títol",
+  lcdFontLcd: "Pantalla LCD",
+  lcdFontDot: "Matriu de punts",
 };

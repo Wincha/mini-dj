@@ -182,6 +182,11 @@ export function analyzeWaveform(audioBuffer, { withBands = true } = {}) {
   return {
     waveData: wave,
     bandIndex: bandIndex ? bandIndex.subarray(0, used) : null,
+    // Energía de GRAVES por muestra, en crudo. Ya estaba calculada para
+    // decidir el color; devolverla no cuesta nada y es de donde sale la
+    // detección de kick (src/audio/structure.js), sin otra pasada por el
+    // audio. La cadencia es la misma que la de waveData: used / duration.
+    bandLow: rmsLow ? rmsLow.subarray(0, used) : null,
     peak,
     duration,
   };

@@ -9,7 +9,7 @@ const NO_OP = [
   'lineTo', 'arc', 'arcTo', 'rect', 'ellipse', 'quadraticCurveTo',
   'bezierCurveTo', 'fill', 'stroke', 'clip', 'save', 'restore', 'translate',
   'rotate', 'scale', 'setTransform', 'resetTransform', 'fillText',
-  'strokeText', 'drawImage', 'setLineDash', 'putImageData',
+  'strokeText', 'drawImage', 'setLineDash', 'putImageData', 'roundRect',
 ]
 
 export function makeContext2D() {

@@ -4,3 +4,24 @@
 :root {
   color-scheme: dark;
 }
+/* Marquesina del nombre de la pista (src/components/Marquee.jsx): el interior
+   lleva dos copias del texto y se desplaza hasta que la segunda cae donde
+   estaba la primera. */
+@keyframes minidj-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    /* Exactamente lo que mide una copia más su hueco: así la segunda cae
+       clavada donde estaba la primera y el bucle no da el salto. Lo mide
+       Marquee.jsx, que es quien sabe cuánto ocupa el texto. */
+    transform: translateX(calc(-1 * var(--minidj-marquee-shift, 50%)));
+  }
+}
+
+/* Con el movimiento reducido del sistema, la marquesina se queda quieta */
+@media (prefers-reduced-motion: reduce) {
+  [style*="minidj-marquee"] {
+    animation: none !important;
+  }
+}

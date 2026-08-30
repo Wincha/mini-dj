@@ -7,7 +7,7 @@ export default {
   masterSync: "마스터 싱크",
   masterSyncTitle:
     "마스터 싱크: SYNC가 켜진 덱은 다른 덱 대신 이 BPM을 따릅니다",
-  masterBpmTitle: "마스터 싱크의 BPM",
+  masterBpmTitle: "마스터 싱크 BPM. 위에서 누른 채 위아래로 끌거나 휠을 돌리면 입력 없이 조절됩니다 (Shift를 누르면 더 미세하게)",
   bpm: "BPM",
   language: "언어",
 
@@ -37,8 +37,6 @@ export default {
   updateChecking: "업데이트 확인 중…",
   updateUpToDate: "최신 버전입니다",
   updateError: "업데이트를 확인할 수 없습니다",
-  follow: "🔁 따라가기",
-  followTitle: "재생 위치를 다시 따라가기",
   play: "▶︎ 재생",
   pause: "❚❚ 일시정지",
   stop: "■ 정지",
@@ -172,7 +170,6 @@ export default {
   keyCompatibleTitle: "재생 중인 트랙과 화성적으로 어울림",
   keyClashTitle: "재생 중인 트랙의 키와 맞지 않음",
   keyLegend: "{key}로 재생 중: 보라색이 화성적으로 어울리는 트랙입니다.",
-  noArtworkTitle: "앨범 아트 없음",
   showArtwork: "앨범 아트",
   showArtworkTitle: "앨범 아트 썸네일 표시/숨기기",
   showArtworkNote: "숨기면 화면 공간이 넓어집니다. 앨범 아트는 계속 저장됩니다.",
@@ -238,4 +235,87 @@ export default {
   logClear: "비우기",
   logFile: "데스크톱 앱에서는 다음 위치에도 저장됩니다: {path}",
   versionTitle: "Mini DJ 버전",
+
+  // Estructura de la pista y aviso de fin
+  structureLabel: "구조",
+  phraseBackCoarseTitle: "프레이즈를 {n} 킥 뒤로",
+  phraseBackFineTitle: "프레이즈를 1 킥 뒤로",
+  phraseFwdFineTitle: "프레이즈를 1 킥 앞으로",
+  phraseFwdCoarseTitle: "프레이즈를 {n} 킥 앞으로",
+  phraseSizeTitle: "프레이즈 길이(킥 수). ⚙ 설정에 있는 것과 같은 항목입니다",
+  structureRedetectTitle: "현재 비트 그리드로 구조를 다시 감지합니다. 직접 맞춘 프레이즈 오프셋은 그대로 유지됩니다",
+  phraseResetTitle: "분석이 찾아낸 프레이즈 오프셋으로 되돌리기",
+  phraseOffsetTitle: "현재 프레이즈 오프셋(킥 수). 직접 맞췄을 때는 호박색으로 표시됩니다",
+  structureTipInKick: "리듬이 있는 구간입니다.",
+  structureTipInBreak: "브레이크 구간입니다.",
+  structureTipDrop: "{n} 킥 뒤에 브레이크가 시작됩니다.",
+  structureTipDropBars: "{n} 킥({bars} 마디) 뒤에 브레이크가 시작됩니다.",
+  structureTipRise: "{n} 킥 뒤에 리듬이 돌아옵니다.",
+  structureTipRiseBars: "{n} 킥({bars} 마디) 뒤에 리듬이 돌아옵니다.",
+  structureTipRiseAfter: "그 뒤 {n} 킥 만에 리듬이 돌아옵니다.",
+  structureTipDropAfter: "그 뒤 {n} 킥 만에 브레이크가 시작됩니다.",
+  structureTipNoChanges: "트랙이 끝날 때까지 더 이상 변화가 없습니다.",
+  structureTipToEnd: "이 트랙은 {n} 킥 뒤에 끝납니다.",
+  structureTipPhrase: "{size} 킥 프레이즈의 {pos}번째 킥입니다.",
+  structureHeading: "구조 표시기",
+  showStructure: "파형 위에 표시기 보이기",
+  structureNote: "리듬이 빠질 때까지(▼)와 돌아올 때까지(▲) 남은 킥 수, 그리고 프레이즈 안의 위치를 셉니다. 트랙을 불러올 때 한 번만 분석합니다.",
+  phraseSizeLabel: "프레이즈 길이",
+  structureUnitLabel: "세는 단위",
+  unitKicks: "킥",
+  unitBars: "마디",
+  warnAmberLabel: "호박색 경고(킥)",
+  warnRedLabel: "빨간색 경고(킥)",
+  endWarnHeading: "트랙 종료 경고",
+  endWarnOn: "트랙이 끝나갈 때 알리기",
+  endWarnNote: "파형 테두리가 빨갛게 깜빡이며, 끝에 가까울수록 빨라집니다. 재생 중일 때만 나오고, 시스템의 동작 줄이기가 켜져 있으면 깜빡이지 않고 켜져 있습니다.",
+  endWarnModeLabel: "알림 기준",
+  endWarnModeSeconds: "남은 초",
+  endWarnModePercent: "남은 비율",
+  endWarnValueSeconds: "초",
+  endWarnValuePercent: "트랙의 %",
+
+  // Pitch (rango del fader y fuerza del bend)
+  pitchHeading: "피치",
+  bendRangeLabel: "피치 벤드 세기",
+  pitchNote: "두 덱에 모두 적용됩니다. 범위는 출발점입니다. SYNC가 더 넓은 폭이 필요하면 스스로 넓히며, 이 설정은 건드리지 않습니다. 벤드 세기는 덱의 − 와 + 버튼이 당기는 양입니다.",
+  masterBpmDownTitle: "마스터 BPM 1 내리기",
+  masterBpmUpTitle: "마스터 BPM 1 올리기",
+
+  // Pestañas de herramientas del deck
+  toolsPosition: "위치",
+  toolsBpm: "BPM",
+  toolsLoops: "루프와 롤",
+
+  // Cabecera y formato de archivo de la lista
+  colDeck: "덱",
+  noArtworkFormatTitle: "커버 없음 · {format} 파일",
+
+  // Resumen de la pista
+  overviewTitle: "트랙 개요: 누르거나 끌어서 이동합니다. 어두운 구간은 브레이크이고, 빨간 선은 리듬이 빠지는 지점, 초록 선은 돌아오는 지점입니다",
+
+  // Pantalla LCD del deck
+  lcdElapsed: "경과",
+  lcdRemaining: "남음",
+  lcdTotal: "전체",
+  lcdTrackBpm: "트랙 BPM",
+  lcdKey: "키",
+  lcdTimeTitle: "트랙 시간. 누르면 경과와 남은 시간이 번갈아 표시됩니다",
+
+  // Marquesina del nombre de la pista
+  marqueeSpeedLabel: "흐르기",
+  marqueeOff: "정지",
+  marqueeSlow: "느리게",
+  marqueeNormal: "보통",
+  marqueeFast: "빠르게",
+  marqueeNote: "이름이 덱 화면에 다 들어가지 않으면 반복해서 흐릅니다. 애니메이션은 브라우저가 처리하므로 CPU를 쓰지 않습니다. 시스템의 동작 줄이기가 켜져 있으면 멈춥니다.",
+
+  // Pantalla del deck: cifras redondeadas o de 14 segmentos
+  lcdHeading: "덱 화면",
+  lcdFontLabel: "숫자",
+  lcdFontRounded: "둥근 글꼴",
+  lcdFontNote: "제목은 5 x 7 도트 매트릭스로, 숫자(시간·BPM·피치 등)는 실제 패널처럼 고정된 구성으로 표시합니다. 숫자만 오는 자리는 7 세그먼트, 기호가 필요한 자리는 14 세그먼트입니다. 보통 글자와 같은 자리를 차지하므로 바꿔도 어긋나지 않습니다.",
+  titleFontLabel: "제목",
+  lcdFontLcd: "LCD 화면",
+  lcdFontDot: "도트 매트릭스",
 };

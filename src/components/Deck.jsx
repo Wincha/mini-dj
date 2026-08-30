@@ -7,7 +7,10 @@ import {
   useImperativeHandle,
 } from "react";
 import Fader from "./Fader";
-import WaveformCanvas from "./WaveformCanvas";
+import LcdDisplay from "./LcdDisplay";
+import WaveScreen from "./WaveScreen";
+import StructureIndicator from "./StructureIndicator";
+import PadButton, { GLOSS, PRESS } from "./PadButton";
 import {
   CUE_NAME_MAX,
   HOT_CUE_COLORS,
@@ -52,10 +55,41 @@ import {
   GRID_BPM_FINE,
   GRID_BPM_COARSE,
 } from "../audio/beatGrid";
+import {
+  PHRASE_SIZES,
+  alignStructure,
+  detectStructure,
+  refitPhrase,
+  sanitizeStructure,
+  shiftPhraseOffset,
+} from "../audio/structure";
+import { endWarnSeconds, resolveStructurePrefs } from "../lib/structurePrefs";
 import { detectKey } from "../audio/keyDetect";
 import { keyLabel } from "../lib/camelot";
 import { readTrackMetadata } from "../audio/metadata";
 import { ERRORS, logError, logWarn } from "../lib/log";
+
+// Redondeo de la fila de transporte (play, stop, sync, key): uno solo para
+// los cuatro, que antes no coincidían entre ellos.
+// Los botones de zoom van ENCIMA de la onda, así que su gris es un punto más
+// claro que el de los demás: sobre el lienzo, el de siempre se perdía.
+const ZOOM_BTN = `px-2 py-0.5 rounded bg-gradient-to-b from-neutral-600 to-neutral-700 hover:from-neutral-500 hover:to-neutral-600 ${GLOSS} ${PRESS}`;
+
+const TRANSPORT_RADIUS = "rounded-xl";
+
+// Pestañas de la fila de herramientas, en el orden en que se usan: primero lo
+// que SITÚA la pista, luego lo que la mueve y al final lo momentáneo.
+const TOOL_TABS = [
+  // Agrupadas por lo que hacen, no por caja: colocar la pista, ajustar su
+  // rejilla y todo lo de dar vueltas.
+  { id: "position", labelKey: "toolsPosition" },
+  { id: "bpm", labelKey: "toolsBpm" },
+  { id: "loops", labelKey: "toolsLoops" },
+];
+
+// Ajustes de estructura por defecto, para cuando el deck se monta suelto
+// (tests) y no le llegan los del diálogo ⚙. Identidad estable a propósito.
+const DEFAULT_STRUCTURE_PREFS = resolveStructurePrefs({});
 
 // Ejecuta algo cuando el navegador esté ocioso (con tope), devolviendo un
 // cancelador. Se usa para el análisis de tonalidad, que es síncrono y no debe
@@ -76,7 +110,7 @@ function Deck({
   pitchPct,
   setPitchPct,
   pitchRange,
-  setPitchRange,
+  bendRange,
   keyLock,
   setKeyLock,
   onAttachEl,
@@ -91,6 +125,10 @@ function Deck({
   onPlayingChange,
   onTrackMeta,
   onCues,
+  onStructure,
+  onPhraseSize,
+  structurePrefs,
+  showKey = true,
   onLocalLoad,
   wavePalette,
   externalTrack,
@@ -108,6 +146,14 @@ function Deck({
   // === Forma de onda / análisis ===
   const [waveData, setWaveData] = useState(null);
   const [bandIndex, setBandIndex] = useState(null);
+  // Energía de graves por muestra: sale de la MISMA pasada que la onda y es
+  // de donde salen los kicks del análisis de estructura.
+  const [bandLow, setBandLow] = useState(null);
+  // === Estructura (tramos con ritmo / sin ritmo + frase) ===
+  // Se calcula una sola vez, al cargar, y se guarda con la pista. Lo que
+  // ajuste el usuario a mano (`manual`) no lo pisa el análisis.
+  const [structure, setStructure] = useState(null);
+  const cachedStructureRef = useRef(false);
   // === Rejilla de beats ===
   // BPM base de la pista (el analizado, o el que haya dejado el usuario a
   // mano). NO incluye el pitch: el pitch va aparte, en el fader.
@@ -140,6 +186,9 @@ function Deck({
   onTrackMetaRef.current = onTrackMeta;
   const onPlayingChangeRef = useRef(onPlayingChange);
   onPlayingChangeRef.current = onPlayingChange;
+
+  // Pestaña de herramientas abierta en este deck
+  const [tool, setTool] = useState(TOOL_TABS[0].id);
 
   const [zoom, setZoom] = useState(64);
   const [scroll, setScroll] = useState(0);
@@ -217,6 +266,96 @@ function Deck({
     onAnalysisRef.current?.(side, { beats });
   }, [beats, side]);
 
+  // === Estructura de la pista ===
+  //
+  // Los tramos se guardan en SEGUNDOS y los índices de beat se recalculan
+  // contra la rejilla actual: así un ajuste manual de rejilla no descuadra la
+  // cuenta atrás. Es una función pura sobre media docena de tramos.
+  const prefs = structurePrefs || DEFAULT_STRUCTURE_PREFS;
+  const phraseSize = prefs.phraseSize;
+  const gridStructure = useMemo(
+    () => (structure ? alignStructure(structure, beats) : null),
+    [structure, beats]
+  );
+
+  // Detección: UNA vez por pista, cuando ya hay onda y rejilla. Nunca durante
+  // la reproducción y nunca si la pista ya traía su estructura guardada.
+  //
+  // OJO con la duración: tiene que ser la del buffer que produjo `bandLow`
+  // (bufferDuration), no la de la rejilla. La cadencia de los graves se deduce
+  // de bandLow.length / duración, así que con la duración del <audio> —que en
+  // FLAC no coincide al milímetro con la del buffer— el mapeo de beat a
+  // muestra deriva y los tramos se mueven un kick o más.
+  useEffect(() => {
+    if (structure || cachedStructureRef.current) return;
+    if (!bandLow?.length || !beats.length || !(bufferDuration > 0)) return;
+    const found = detectStructure({
+      bandLow,
+      duration: bufferDuration,
+      beats,
+      phraseSize,
+    });
+    if (found) setStructure(found);
+  }, [structure, bandLow, beats, bufferDuration, phraseSize]);
+
+  // Cambiar el tamaño de frase (aquí o en ⚙: es el mismo ajuste) recoloca la
+  // retícula sin volver a analizar nada.
+  useEffect(() => {
+    setStructure((prev) => (prev ? refitPhrase(prev, phraseSize) : prev));
+  }, [phraseSize]);
+
+  // La estructura sube al padre, que la refleja en la lista y la persiste
+  const onStructureRef = useRef(onStructure);
+  onStructureRef.current = onStructure;
+  useEffect(() => {
+    if (!objectUrl || !structure) return;
+    onStructureRef.current?.(side, structure);
+  }, [structure, objectUrl, side]);
+
+  // Mueve la frase n kicks. Queda marcado como manual: el análisis ya no lo pisa.
+  const shiftPhrase = (delta) => {
+    setStructure((prev) =>
+      prev
+        ? {
+            ...prev,
+            phraseOffset: shiftPhraseOffset(prev.phraseOffset, delta, prev.phraseSize),
+            manual: true,
+          }
+        : prev
+    );
+  };
+
+  // Vuelve al desplazamiento que dijo el análisis
+  const resetPhrase = () => {
+    setStructure((prev) =>
+      prev ? { ...prev, phraseOffset: prev.detectedOffset, manual: false } : prev
+    );
+  };
+
+  // Relanza la detección sobre la rejilla ACTUAL (la que haya ajustado el
+  // usuario). Un desplazamiento de frase puesto a mano se conserva.
+  const redetectStructure = () => {
+    if (!bandLow?.length || !beats.length || !(bufferDuration > 0)) return;
+    const found = detectStructure({
+      bandLow,
+      duration: bufferDuration,
+      beats,
+      phraseSize,
+    });
+    if (!found) return;
+    setStructure((prev) =>
+      prev?.manual
+        ? { ...found, phraseOffset: prev.phraseOffset, manual: true }
+        : found
+    );
+  };
+
+  // Aviso de fin de pista: segundos que quedan cuando empieza a parpadear
+  const endWarnAt = useMemo(
+    () => endWarnSeconds(prefs.endWarn, duration || bufferDuration),
+    [prefs.endWarn, duration, bufferDuration]
+  );
+
   const round2 = (v) => Math.round(v * 100) / 100;
 
   // Punto ÚNICO de cambio de rejilla: BPM base + ancla. Avisa al padre, que
@@ -258,11 +397,12 @@ function Deck({
 
     const duration = audioBuffer.duration;
     setBufferDuration(duration);
-    const { waveData: norm, bandIndex: bands, peak } =
+    const { waveData: norm, bandIndex: bands, bandLow: low, peak } =
       analyzeWaveform(audioBuffer);
 
     setWaveData(norm);
     setBandIndex(bands);
+    setBandLow(low);
     if (typeof onAnalysis === "function") {
       onAnalysis(side, { waveData: norm, duration });
     }
@@ -505,6 +645,12 @@ function Deck({
     setFileName(f.name);
     setWaveData(null);
     setBandIndex(null);
+    setBandLow(null);
+    // Estructura guardada de ESTA pista: se restaura tal cual y el análisis
+    // no la vuelve a calcular (ni pisa el ajuste manual de frase).
+    const cachedStructure = sanitizeStructure(cached?.structure);
+    cachedStructureRef.current = Boolean(cachedStructure);
+    setStructure(cachedStructure);
     setMusicalKey(cached?.musicalKey || null);
     setTags(
       cached?.artist || cached?.title
@@ -599,6 +745,7 @@ function Deck({
       hotCues: tr.hotCues,
       savedLoops: tr.savedLoops,
       activeLoop: tr.activeLoop,
+      structure: tr.structure,
     });
   }, [externalTrack?.loadToken, externalTrack?.file]);
 
@@ -660,15 +807,6 @@ function Deck({
     setCuePoint(time);
   };
 
-  const seek = (v) => {
-    const el = audioRef.current;
-    if (!el) return;
-    const time = Number(v);
-    el.currentTime = time;
-    setCurrent(time);
-    setCueIfPaused(time);
-  };
-
   // Arrastre de la onda en pausa: empujar la pista hasta la línea de reproducción
   const onDragSeek = (time) => {
     const el = audioRef.current;
@@ -679,12 +817,13 @@ function Deck({
     setCueIfPaused(time);
   };
 
-  // Arrastre de la onda en play: nudge temporal tipo pitch bend
-  const NUDGE_MAX = 6;
+  // Arrastre de la onda en play: nudge temporal tipo pitch bend. Da más
+  // margen que los botones (es un gesto continuo), pero sigue atado al ajuste.
   const onNudge = (pct) => {
+    const tope = (bendRange > 0 ? bendRange : 2) * 3;
     bendHoldRef.current = true;
     if (bendRafRef.current) cancelAnimationFrame(bendRafRef.current);
-    setBendPct(Math.max(-NUDGE_MAX, Math.min(NUDGE_MAX, pct)));
+    setBendPct(Math.max(-tope, Math.min(tope, pct)));
   };
 
   // Handlers del canvas con identidad estable: así WaveformCanvas (memo) no
@@ -697,12 +836,15 @@ function Deck({
       onNudge: (...a) => waveHandlersRef.current.onNudge?.(...a),
       onNudgeEnd: (...a) => waveHandlersRef.current.onNudgeEnd?.(...a),
       onWheelZoom: (...a) => waveHandlersRef.current.onWheelZoom?.(...a),
+      onOverviewSeek: (...a) => waveHandlersRef.current.onOverviewSeek?.(...a),
     }),
     []
   );
 
   // === Quantize: imanta cues/loops/saltos al beat más cercano ===
-  const [quantize, setQuantize] = useState(true);
+  // Apagado de partida: imantar por sorpresa un cue o un loop que has puesto
+  // a mano desconcierta más de lo que ayuda.
+  const [quantize, setQuantize] = useState(false);
   const snapToGrid = (time) =>
     quantize ? nearestBeat(beats, time) : time;
 
@@ -1152,13 +1294,9 @@ function Deck({
     []
   );
 
-  const onRangeChange = (e) => {
-    const r = Number(e.target.value);
-    setPitchRange(side, r);
-    setPitchPct(side, Math.max(-r, Math.min(r, pitchPct)));
-  };
-
-  const BEND_MAX = 2.0;
+  // Cuánto estira el bend, en % de tempo. Sale de la configuración: cada
+  // quien lo quiere de una manera y en makina un 2 % ya es mucho.
+  const BEND_MAX = bendRange > 0 ? bendRange : 2;
   const BEND_RELEASE_MS = 120;
 
   function startBend(sign) {
@@ -1192,7 +1330,9 @@ function Deck({
       if (!el) return;
       el.currentTime = time;
       setCurrent(time);
-      setFollow(false);
+      // Se sigue siguiendo la reproducción: para mirar otro punto del tema
+      // está el resumen de abajo, que enseña la pista entera.
+      setFollow(true);
       setCueIfPaused(time);
     },
     onDragSeek,
@@ -1200,6 +1340,19 @@ function Deck({
     onNudgeEnd: releaseBend,
     onWheelZoom: (dir) =>
       setZoom((z) => Math.max(1, Math.min(256, dir > 0 ? z * 2 : z / 2))),
+    // Desde el resumen se salta a cualquier punto de la pista. Al saltar se
+    // vuelve a seguir la reproducción: es lo que se espera al usarlo como
+    // mando de desplazamiento.
+    onOverviewSeek: (frac) => {
+      const el = audioRef.current;
+      const dur = duration || bufferDuration || el?.duration || 0;
+      if (!el || !(dur > 0)) return;
+      const time = Math.max(0, Math.min(dur - 0.01, frac * dur));
+      el.currentTime = time;
+      setCurrent(time);
+      setFollow(true);
+      setCueIfPaused(time);
+    },
   };
 
   return (
@@ -1225,45 +1378,6 @@ function Deck({
               </span>
             )}
           </h2>
-          {/* Cargar archivo y nombre de la pista en un solo control.
-              Ocupa el hueco que queda a la derecha del título del deck:
-              flex-1 + min-w-0 para que el nombre largo se corte con … en
-              vez de desbordar la tarjeta. */}
-          {/* El title va en el envoltorio: un <button disabled> no dispara
-              eventos de ratón y el navegador no le enseña el tooltip */}
-          <span
-            className="flex flex-1 min-w-0"
-            title={loadBlocked ? t("loadLockedTitle", { side }) : t("loadFile")}
-          >
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={loadBlocked}
-            className={`flex w-full min-w-0 items-center gap-2 px-3 py-1.5 rounded-xl border text-left ${
-              loadBlocked
-                ? "border-neutral-800 bg-neutral-900/60 opacity-60 cursor-not-allowed"
-                : "border-neutral-700 bg-neutral-800/70 hover:bg-neutral-700/70"
-            }`}
-          >
-            {/* Título y artista de las etiquetas ID3; si no hay, el nombre
-                del archivo como siempre. La segunda línea se pinta aunque
-                esté vacía para que el alto no baile al cargar una pista. */}
-            <span className="flex-1 min-w-0 grid">
-              <span
-                className={`truncate text-base font-semibold leading-tight ${
-                  objectUrl ? "text-neutral-100" : "text-neutral-500"
-                }`}
-              >
-                {tags?.title || getFilenameWithoutExtension()}
-              </span>
-              <span className="truncate text-[10px] leading-tight text-neutral-400">
-                {tags?.artist || "\u00A0"}
-              </span>
-            </span>
-            <span className="text-base shrink-0">
-              {loadBlocked ? "🔒" : "📂"}
-            </span>
-          </button>
-          </span>
           <input
             ref={fileInputRef}
             type="file"
@@ -1275,249 +1389,328 @@ function Deck({
         {/* Content */}
         <div className="flex flex-row gap-3 w-full">
           <div className="flex flex-col gap-1 flex-1 min-w-0">
-            {/* Tiempo + BPM */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-baseline gap-2">
-                <h5
-                  className="tracking-tight cursor-pointer tabular-nums"
-                  onClick={() =>
-                    setReverseAdvancedTime(
-                      (prevReverseTime) => !prevReverseTime
-                    )
-                  }
+            {/* Pantalla LCD: tiempo, duración, BPM, tonalidad, pitch y bend.
+                Antes eran etiquetas sueltas repartidas por la tarjeta —dos de
+                ellas encima del fader de pitch, que por eso era más corto. */}
+            <LcdDisplay
+              trackTitle={tags?.title || getFilenameWithoutExtension() || t("noFile")}
+              trackInfo={
+                [tags?.artist, tags?.album].filter(Boolean).join(" · ")
+              }
+              marqueeSpeed={prefs.marqueeSpeed}
+              font={prefs.lcdFont}
+              titleFont={prefs.titleFont}
+              loadButton={
+                // A la mínima expresión: solo el icono. El nombre de la pista
+                // ya está a su izquierda, en la propia pantalla.
+                <span
+                  className="shrink-0"
+                  title={loadBlocked ? t("loadLockedTitle", { side }) : t("loadFile")}
                 >
-                  {reverseAdvancedTime
-                    ? `-${calcDuration(duration - current)}`
-                    : calcDuration(current)}
-                </h5>
-                {objectUrl && (
-                  // Distancia hasta el CUE, no su posición absoluta: al
-                  // moverte por la pista lo que quieres saber es cuánto te
-                  // falta. El signo va en una caja de ancho fijo porque
-                  // tabular-nums cuadra las cifras, pero no + y −.
-                  <span
-                    className="text-[10px] text-orange-400 tabular-nums whitespace-nowrap"
-                    title={t("cueTitle", { time: calcDuration(cuePoint) })}
+                  <PadButton
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={loadBlocked}
                   >
-                    {t("cue")}{" "}
-                    <span className="inline-block w-[0.62em] text-center">
-                      {/* El signo sale de la cifra YA redondeada: por debajo
-                          de un segundo estás en el cue, y un "−00:00" no
-                          significa nada */}
-                      {current < cuePoint && cuePoint - current >= 1 ? "−" : "+"}
-                    </span>
-                    {calcDuration(Math.abs(current - cuePoint))}
-                  </span>
-                )}
-              </div>
-              <div className="text-right text-xs text-neutral-400 leading-tight tabular-nums min-w-20 shrink-0">
-                <div>{calcDuration(duration)}</div>
-                <div
-                  ref={bpmDisplayRef}
-                  onClick={onTapBeat}
-                  className="cursor-pointer select-none"
-                  title={t("bpmDisplayTitle")}
-                >
-                  {runningBpm
-                    ? `${runningBpm.toFixed(1)} BPM`
-                    : bpm
-                    ? `${bpm} BPM`
-                    : t("bpmNone")}
-                </div>
-                {/* Tonalidad: se pinta siempre (guion si aún no se sabe) para
-                    reservar la línea y no mover el resto de la cabecera */}
-                <div
-                  className={`text-[10px] whitespace-nowrap ${
-                    musicalKey ? "text-violet-300" : "text-neutral-600"
-                  }`}
-                  title={t("keyTitle")}
-                >
-                  {musicalKey
+                    {loadBlocked ? "🔒" : "📂"}
+                  </PadButton>
+                </span>
+              }
+              time={
+                reverseAdvancedTime
+                  ? `-${calcDuration(duration - current)}`
+                  : calcDuration(current)
+              }
+              timeLabel={reverseAdvancedTime ? t("lcdRemaining") : t("lcdElapsed")}
+              timeTitle={t("lcdTimeTitle")}
+              onToggleTime={() => setReverseAdvancedTime((prev) => !prev)}
+              cue={
+                objectUrl
+                  ? {
+                      label: t("cue"),
+                      title: t("cueTitle", { time: calcDuration(cuePoint) }),
+                      // El signo sale de la cifra YA redondeada: por debajo de
+                      // un segundo estás en el cue, y un "−00:00" no dice nada
+                      text: `${
+                        current < cuePoint && cuePoint - current >= 1 ? "−" : "+"
+                      }${calcDuration(Math.abs(current - cuePoint))}`,
+                    }
+                  : null
+              }
+              duration={calcDuration(duration)}
+              durationLabel={t("lcdTotal")}
+              bpm={bpm ? String(Math.round(bpm)) : "-"}
+              bpmLabel={t("lcdTrackBpm")}
+              bpmTitle={t("bpmDisplayTitle")}
+              onBpmClick={onTapBeat}
+              bpmRef={bpmDisplayRef}
+              runningBpm={runningBpm ? String(Math.round(runningBpm)) : "-"}
+              runningLabel={t("bpm")}
+              musicalKey={
+                showKey
+                  ? musicalKey
                     ? keyLabel(musicalKey.pitchClass, musicalKey.mode)
-                    : t("keyNone")}
-                </div>
-              </div>
-            </div>
-            {/* Seek global */}
-            <Fader
-              min={0}
-              max={Math.max(1, Math.floor(duration))}
-              step={0.01}
-              value={Number.isFinite(current) ? current : 0}
-              onChange={(e) => seek(e.target.value)}
-              disabled={!objectUrl}
-              thickness={16}
-              railThickness={5}
-              accent={side === "A" ? "#22d3ee" : "#e879f9"}
-              resetValue={cuePoint}
-              title={t("seekTitle")}
-              ariaLabel={t("seekTitle")}
+                    : t("keyNone")
+                  : null
+              }
+              keyKnown={Boolean(musicalKey)}
+              keyLabel={t("lcdKey")}
+              keyTitle={t("keyTitle")}
+              pitch={`${livePitch > 0 ? "+" : ""}${livePitch.toFixed(2)}%`}
+              pitchLabel={t("pitch")}
+              pitchTitle={t("pitchFaderTitle")}
+              bend={`${bendPct > 0 ? "+" : ""}${bendPct.toFixed(2)}%`}
+              bendLabel={t("bend")}
+              keyLock={keyLock}
             />
-            {/* Forma de onda */}
-            <div className="relative w-full pb-7">
-              <WaveformCanvas
-                waveData={waveData}
-                bandIndex={bandIndex}
-                palette={wavePalette}
-                beats={beats}
-                cuePoint={cuePoint}
-                hotCues={hotCues}
-                loopIn={loopIn}
-                loopOut={loopOut}
-                loopOn={loopOn}
-                loopRolling={Boolean(rolling)}
-                audioRef={audioRef}
-                zoom={zoom}
-                scroll={scroll}
-                follow={follow}
-                onSeek={stableWave.onSeek}
-                onDragSeek={stableWave.onDragSeek}
-                onNudge={stableWave.onNudge}
-                onNudgeEnd={stableWave.onNudgeEnd}
-                onWheelZoom={stableWave.onWheelZoom}
-              />
+            {/* La pantalla del deck: onda ampliada + resumen de la pista */}
+            <WaveScreen
+              waveData={waveData}
+              bandIndex={bandIndex}
+              palette={wavePalette}
+              beats={beats}
+              structure={gridStructure}
+              duration={gridDuration}
+              audioRef={audioRef}
+              cuePoint={cuePoint}
+              hotCues={hotCues}
+              loopIn={loopIn}
+              loopOut={loopOut}
+              loopOn={loopOn}
+              loopRolling={Boolean(rolling)}
+              endWarnAt={endWarnAt}
+              zoom={zoom}
+              scroll={scroll}
+              follow={follow}
+              onSeek={stableWave.onSeek}
+              onDragSeek={stableWave.onDragSeek}
+              onNudge={stableWave.onNudge}
+              onNudgeEnd={stableWave.onNudgeEnd}
+              onWheelZoom={stableWave.onWheelZoom}
+              onOverviewSeek={stableWave.onOverviewSeek}
+              overviewTitle={t("overviewTitle")}
+            >
+              {/* Estructura: cuántos kicks quedan hasta el próximo cambio.
+                  Va en la esquina inferior derecha de la onda, con su propio
+                  bucle: no re-renderiza el deck ni al cambiar la cuenta. */}
+              {prefs.show && objectUrl && (
+                <StructureIndicator
+                  structure={gridStructure}
+                  beats={beats}
+                  audioRef={audioRef}
+                  phraseSize={phraseSize}
+                  phraseOffset={structure?.phraseOffset ?? 0}
+                  unit={prefs.unit}
+                  warnAmber={prefs.warnAmber}
+                  warnRed={prefs.warnRed}
+                />
+              )}
               {/* Feedback de análisis */}
               {analyzing === "wave" && (
-                <div className="absolute inset-x-0 top-0 h-20 flex items-center justify-center rounded-lg bg-neutral-900/70 pointer-events-none">
+                <div className="absolute inset-0 flex items-center justify-center rounded-md bg-neutral-900/70 pointer-events-none">
                   <span className="text-xs text-neutral-300 animate-pulse">
                     {t("analyzingTrack")}
                   </span>
                 </div>
               )}
               {(analyzing === "bpm" || analyzing === "regrid") && (
-                <div className="absolute inset-x-0 bottom-8 flex justify-center pointer-events-none">
+                <div className="absolute inset-x-0 bottom-1 flex justify-center pointer-events-none">
                   <span className="px-2 py-0.5 rounded bg-neutral-900/80 text-[10px] text-neutral-300 animate-pulse">
                     {analyzing === "regrid" ? t("regridding") : t("detectingBpm")}
                   </span>
                 </div>
               )}
               {/* Zoom */}
-              <div className="absolute right-2 top-1 flex gap-2 text-xs text-neutral-400">
+              <div className="absolute right-1.5 top-1.5 flex gap-1.5 text-xs text-neutral-400">
                 <button
                   onClick={() => setZoom((z) => Math.min(z * 2, 256))}
-                  className="px-2 py-0.5 bg-neutral-700 rounded hover:bg-neutral-600"
+                  className={ZOOM_BTN}
                 >
                   🔍+
                 </button>
                 <button
                   onClick={() => setZoom((z) => Math.max(z / 2, 1))}
-                  className="px-2 py-0.5 bg-neutral-700 rounded hover:bg-neutral-600"
+                  className={ZOOM_BTN}
                 >
                   🔍−
                 </button>
               </div>
-              {/* Seguir */}
-              <div className="absolute left-2 top-1">
-                {!follow && (
-                  <button
-                    onClick={() => setFollow(true)}
-                    className="px-2 py-0.5 text-[10px] bg-neutral-700 text-neutral-300 rounded hover:bg-neutral-600"
-                    title={t("followTitle")}
-                  >
-                    {t("follow")}
-                  </button>
-                )}
-              </div>
-              {/* Scroll manual */}
-              {zoom > 1 && (
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.001}
-                  value={scroll}
-                  onChange={(e) => {
-                    setScroll(Number(e.target.value));
-                    setFollow(false);
-                  }}
-                  className="absolute bottom-1 left-2 right-2 w-[calc(100%-1rem)] accent-white"
-                />
-              )}
+            </WaveScreen>
+          </div>
+          <div className="flex flex-col gap-2 w-24 shrink-0 items-center">
+            {/* Pitch. Las cifras (pitch y bend) están en el LCD de arriba,
+                así que aquí solo va el fader: se estira para ocupar todo lo
+                que sobra y deja los botones de bend abajo del todo, a la
+                altura del borde inferior de la pantalla. */}
+            <div className="flex flex-1 min-h-0 flex-col items-center">
+              {/* Como un plato Technics: arriba más lento (−), abajo más rápido (+) */}
+              <Fader
+                orientation="vertical"
+                min={-pitchRange}
+                max={pitchRange}
+                step={0.01}
+                value={pitchPct}
+                onChange={(e) => onPitchChange(e.target.value)}
+                fill="center"
+                ticks={9}
+                invert={true}
+                accent="#7dd3fc"
+                resetValue={0}
+                title={t("pitchFaderTitle")}
+                ariaLabel={t("pitch")}
+              />
             </div>
+            {/* Bend: pulsadores momentáneos. Cuánto estiran se ajusta en
+                ⚙ Configuración y se cuenta en el tooltip; en el botón solo va
+                el signo. */}
+            <div className="flex items-center justify-center gap-1">
+              <PadButton
+                size="text"
+                onMouseDown={() => startBend(-1)}
+                onMouseUp={releaseBend}
+                onMouseLeave={releaseBend}
+                onTouchStart={() => startBend(-1)}
+                onTouchEnd={releaseBend}
+                title={t("bendMinusTitle")}
+              >
+                −
+              </PadButton>
+              <PadButton
+                size="text"
+                onMouseDown={() => startBend(+1)}
+                onMouseUp={releaseBend}
+                onMouseLeave={releaseBend}
+                onTouchStart={() => startBend(+1)}
+                onTouchEnd={releaseBend}
+                title={t("bendPlusTitle")}
+              >
+                +
+              </PadButton>
+            </div>
+          </div>
+        </div>
             {/* Transporte */}
-            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              {/* Un solo botón: en grid reservamos el ancho del texto más
-                  largo (play/pausa) para que no baile al alternar idioma */}
-              <button
-                onClick={isPlaying ? pause : play}
-                disabled={!objectUrl && !isPlaying}
-                className={`px-4 py-2 rounded-2xl font-semibold text-black grid place-items-center disabled:opacity-50 ${
-                  isPlaying ? "bg-yellow-400" : "bg-emerald-500"
-                }`}
-              >
-                <span className="col-start-1 row-start-1 invisible h-0" aria-hidden>
-                  {t("play")}
-                </span>
-                <span className="col-start-1 row-start-1 invisible h-0" aria-hidden>
-                  {t("pause")}
-                </span>
-                <span className="col-start-1 row-start-1 whitespace-nowrap">
-                  {isPlaying ? t("pause") : t("play")}
-                </span>
-              </button>
-              <button
-                onClick={stop}
-                disabled={!objectUrl}
-                className="px-4 py-2 rounded-2xl bg-neutral-200 text-black font-semibold text-center min-w-24 disabled:opacity-50"
-                title={t("stopTitle")}
-              >
-                {t("stop")}
-              </button>
-              {/* min-w fijo: que el texto SYNC·MST no ensanche y desplace la UI */}
-              <button
-                onClick={() => onSync?.(side)}
-                disabled={!canSync || !bpm}
-                className={`px-3 py-2 rounded-2xl font-semibold text-center min-w-28 disabled:opacity-40 ${
-                  syncActive
-                    ? "bg-emerald-500 text-black"
-                    : "bg-sky-500/80 text-black"
-                }`}
-                title={
-                  syncActive
-                    ? t("syncActiveTitle", { source: syncLabel })
-                    : t("syncTitle")
-                }
-              >
-                {syncActive ? `${t("sync")}·${syncLabel}` : t("sync")}
-              </button>
-              <button
-                onClick={() => setKeyLock(side, !keyLock)}
-                disabled={!objectUrl}
-                className={`px-3 py-2 rounded-2xl text-xs font-semibold border disabled:opacity-40 ${
-                  keyLock
-                    ? "bg-sky-400 text-black border-sky-300"
-                    : "bg-neutral-800 text-neutral-200 border-neutral-700"
-                }`}
-                title={t("keyLockTitle")}
-              >
-                {t("keyLock")}
-              </button>
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            {/* Un solo botón: en grid reservamos el ancho del texto más
+                largo (play/pausa) para que no baile al alternar idioma */}
+            <PadButton
+              size="transport"
+              radius={TRANSPORT_RADIUS}
+              skin="none"
+              contentClass="grid place-items-center w-full"
+              onClick={isPlaying ? pause : play}
+              disabled={!objectUrl && !isPlaying}
+              className={`min-w-24 text-sm text-black bg-gradient-to-b ${
+                isPlaying
+                  ? "from-yellow-300 to-yellow-500 border-yellow-400 hover:from-yellow-200 hover:to-yellow-400"
+                  : "from-emerald-400 to-emerald-600 border-emerald-500 hover:from-emerald-300 hover:to-emerald-500"
+              }`}
+            >
+              <span className="col-start-1 row-start-1 invisible h-0" aria-hidden>
+                {t("play")}
+              </span>
+              <span className="col-start-1 row-start-1 invisible h-0" aria-hidden>
+                {t("pause")}
+              </span>
+              <span className="col-start-1 row-start-1 whitespace-nowrap">
+                {isPlaying ? t("pause") : t("play")}
+              </span>
+            </PadButton>
+            <PadButton
+              size="transport"
+              radius={TRANSPORT_RADIUS}
+              skin="none"
+              onClick={stop}
+              disabled={!objectUrl}
+              className="min-w-24 text-sm text-black border-neutral-300 bg-gradient-to-b from-white to-neutral-300 hover:from-neutral-100 hover:to-neutral-400"
+              title={t("stopTitle")}
+            >
+              {t("stop")}
+            </PadButton>
+            {/* SYNC y KEY son de encender y apagar: llevan testigo con luz,
+                como los de las cajas de abajo. min-w fijo en el SYNC para que
+                el texto SYNC·MST no ensanche ni desplace la fila. */}
+            <PadButton
+              size="transport"
+              led
+              active={syncActive}
+              onClick={() => onSync?.(side)}
+              disabled={!canSync || !bpm}
+              radius={TRANSPORT_RADIUS}
+              className="text-sm min-w-28"
+              title={
+                syncActive
+                  ? t("syncActiveTitle", { source: syncLabel })
+                  : t("syncTitle")
+              }
+            >
+              {syncActive ? `${t("sync")}·${syncLabel}` : t("sync")}
+            </PadButton>
+            <PadButton
+              size="transport"
+              led
+              active={keyLock}
+              color="#38bdf8"
+              onClick={() => setKeyLock(side, !keyLock)}
+              disabled={!objectUrl}
+              radius={TRANSPORT_RADIUS}
+              className="text-xs"
+              title={t("keyLockTitle")}
+            >
+              {t("keyLock")}
+            </PadButton>
+          </div>
+        {/* Herramientas del deck, por pestañas.
+              Antes eran tres filas de cajas y se comían media tarjeta. Cada
+              pestaña enseña UN grupo, en el orden de siempre, y el panel
+              tiene alto fijo: cambiar de pestaña no mueve nada de sitio. */}
+          <div className="pt-3 border-t border-neutral-800/70">
+            <div role="tablist" className="flex gap-0.5 overflow-x-auto">
+              {TOOL_TABS.map((tb) => (
+                <button
+                  key={tb.id}
+                  role="tab"
+                  aria-selected={tool === tb.id}
+                  onClick={() => setTool(tb.id)}
+                  className={`px-2 py-1 text-[9px] font-semibold uppercase tracking-wide whitespace-nowrap border-b-2 -mb-px ${
+                    tool === tb.id
+                      ? "border-emerald-400 text-neutral-100"
+                      : "border-transparent text-neutral-500 hover:text-neutral-300"
+                  }`}
+                >
+                  {t(tb.labelKey)}
+                </button>
+              ))}
             </div>
-            {/* Herramientas agrupadas en dos filas:
-                arriba hot cues + rejilla, abajo jump + loop */}
-            <div className="flex flex-col gap-2 text-xs mt-1 pt-3 border-t border-neutral-800/70">
-              <div className="flex flex-wrap items-stretch gap-2">
-              {/* Ocho hot cues en dos filas de cuatro. El hueco está
-                  reservado aunque no haya ninguno puesto y cada pad tiene su
-                  línea de etiqueta siempre pintada, así que ni ponerles nombre
-                  ni cambiar de idioma mueve nada. */}
-              <Group label={t("hotCuesLabel")} className="relative">
-                <div className="grid grid-cols-4 gap-1">
+            {/* Alto fijo: el deck mide lo mismo en todas las pestañas.
+                `relative` porque el editor de nombre flota sobre el panel. */}
+            <div className="relative mt-1 flex min-h-[5.25rem] flex-wrap items-stretch gap-2 rounded-lg border border-neutral-800 bg-neutral-900/40 p-1.5 text-xs">
+              {tool === "position" && (
+                <>
+                <Group label={t("hotCuesLabel")} className="relative">
+                <div className="grid grid-cols-4 gap-0.5">
                   {hotCues.map((cue, i) => (
-                    <CuePad
+                    <PadButton
                       key={i}
-                      index={i}
-                      cue={cue}
+                      size="cue"
+                      led
+                      active={Boolean(cue)}
+                      color={HOT_CUE_COLORS[i]}
+                      sub={cue?.name || ""}
                       disabled={!objectUrl}
-                      onTrigger={() => triggerHotCue(i)}
-                      onClear={() => clearHotCue(i)}
-                      onRename={() =>
-                        setNaming({
-                          kind: "cue",
-                          index: i,
-                          value: cue?.name || "",
-                        })
+                      onClick={(e) =>
+                        e.shiftKey ? clearHotCue(i) : triggerHotCue(i)
                       }
+                      onDoubleClick={(e) => {
+                        e.preventDefault();
+                        if (cue) {
+                          setNaming({ kind: "cue", index: i, value: cue.name || "" });
+                        }
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        clearHotCue(i);
+                      }}
                       title={
                         cue
                           ? t("hotCueGoTitle", {
@@ -1526,7 +1719,9 @@ function Deck({
                             })
                           : t("hotCueSetTitle", { n: i + 1 })
                       }
-                    />
+                    >
+                      {i + 1}
+                    </PadButton>
                   ))}
                 </div>
                 {naming?.kind === "cue" && (
@@ -1544,153 +1739,16 @@ function Deck({
                     onCancel={() => setNaming(null)}
                   />
                 )}
-              </Group>
-
-              <Group label={t("gridLabel")}>
-                <div className="flex flex-col gap-1">
-                  {/* Fila 1: TAP · quantize · octava · reanálisis guiado.
-                      A la derecha, el BPM BASE de la pista: es el que define
-                      la rejilla y NO es el pitch (el pitch va en el fader). */}
-                  <div className="flex items-center gap-0.5">
-                    <button
-                      onClick={onTapBeat}
-                      disabled={!objectUrl}
-                      className="h-7 px-2 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-semibold active:bg-orange-400 active:text-black disabled:opacity-40"
-                      title={t("tapTitle")}
-                    >
-                      {t("tap")}
-                    </button>
-                    <button
-                      onClick={() => setQuantize((q) => !q)}
-                      disabled={!objectUrl}
-                      className={`w-7 h-7 rounded-lg border font-bold disabled:opacity-40 ${
-                        quantize
-                          ? "bg-violet-500/80 border-violet-400 text-black"
-                          : "bg-neutral-800 border-neutral-700 text-neutral-400"
-                      }`}
-                      title={t("quantizeTitle")}
-                    >
-                      Q
-                    </button>
-                    <span className="w-px h-5 bg-neutral-800 mx-0.5" />
-                    <GridBtn
-                      onClick={() => scaleGrid(0.5)}
-                      disabled={!bpm}
-                      title={t("gridHalveTitle")}
-                    >
-                      ÷2
-                    </GridBtn>
-                    <GridBtn
-                      onClick={() => scaleGrid(2)}
-                      disabled={!bpm}
-                      title={t("gridDoubleTitle")}
-                    >
-                      ×2
-                    </GridBtn>
-                    <GridBtn
-                      onClick={regridFromManual}
-                      disabled={!bpm || !!analyzing}
-                      title={t("gridRegridTitle")}
-                      className={
-                        analyzing === "regrid"
-                          ? "bg-orange-400 border-orange-300 text-black animate-pulse"
-                          : ""
-                      }
-                    >
-                      ⟳
-                    </GridBtn>
-                    <span
-                      className="ml-auto pl-1.5 w-12 shrink-0 text-right text-[10px] text-neutral-400 tabular-nums"
-                      title={t("gridBaseBpmTitle")}
-                    >
-                      {bpm ? `${bpm.toFixed(2)}` : "—"}
-                    </span>
-                  </div>
-                  {/* Fila 2: los dos ejes del ajuste manual.
-                      Izquierda: mover la rejilla (fase). Derecha: separar o
-                      juntar los beats (BPM base de la pista). */}
-                  <div className="flex items-end gap-1.5">
-                    <Cluster
-                      label={t("gridPhaseLabel")}
-                      title={t("gridPhaseTitle")}
-                    >
-                      <GridBtn
-                        onClick={() => nudgeGrid(-GRID_NUDGE_COARSE)}
-                        disabled={!bpm}
-                        title={t("gridPhaseBackCoarseTitle")}
-                      >
-                        «
-                      </GridBtn>
-                      <GridBtn
-                        onClick={() => nudgeGrid(-GRID_NUDGE_FINE)}
-                        disabled={!bpm}
-                        title={t("gridPhaseBackFineTitle")}
-                      >
-                        ‹
-                      </GridBtn>
-                      <GridBtn
-                        onClick={() => nudgeGrid(GRID_NUDGE_FINE)}
-                        disabled={!bpm}
-                        title={t("gridPhaseFwdFineTitle")}
-                      >
-                        ›
-                      </GridBtn>
-                      <GridBtn
-                        onClick={() => nudgeGrid(GRID_NUDGE_COARSE)}
-                        disabled={!bpm}
-                        title={t("gridPhaseFwdCoarseTitle")}
-                      >
-                        »
-                      </GridBtn>
-                    </Cluster>
-                    <Cluster
-                      label={t("gridTempoLabel")}
-                      title={t("gridTempoTitle")}
-                    >
-                      <GridBtn
-                        onClick={() => stretchGrid(-GRID_BPM_COARSE)}
-                        disabled={!bpm}
-                        title={t("gridTempoDownCoarseTitle")}
-                      >
-                        <span className="tracking-tighter">−−</span>
-                      </GridBtn>
-                      <GridBtn
-                        onClick={() => stretchGrid(-GRID_BPM_FINE)}
-                        disabled={!bpm}
-                        title={t("gridTempoDownFineTitle")}
-                      >
-                        −
-                      </GridBtn>
-                      <GridBtn
-                        onClick={() => stretchGrid(GRID_BPM_FINE)}
-                        disabled={!bpm}
-                        title={t("gridTempoUpFineTitle")}
-                      >
-                        +
-                      </GridBtn>
-                      <GridBtn
-                        onClick={() => stretchGrid(GRID_BPM_COARSE)}
-                        disabled={!bpm}
-                        title={t("gridTempoUpCoarseTitle")}
-                      >
-                        <span className="tracking-tighter">++</span>
-                      </GridBtn>
-                    </Cluster>
-                  </div>
-                </div>
-              </Group>
-              </div>
-
-              <div className="flex flex-wrap items-stretch gap-2">
-              <Group label={t("jump")}>
-                <button
+                </Group>
+                <Group label={t("jump")}>
+                <PadButton
+                  size="sm"
                   onClick={() => beatJump(-1)}
                   disabled={!objectUrl || !bpm}
-                  className="w-7 h-7 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-bold disabled:opacity-40"
                   title={t("jumpBackTitle", { n: jumpBeats })}
                 >
                   «
-                </button>
+                </PadButton>
                 <select
                   value={jumpBeats}
                   onChange={(e) => setJumpBeats(Number(e.target.value))}
@@ -1704,161 +1762,337 @@ function Deck({
                     </option>
                   ))}
                 </select>
-                <button
+                <PadButton
+                  size="sm"
                   onClick={() => beatJump(+1)}
                   disabled={!objectUrl || !bpm}
-                  className="w-7 h-7 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-bold disabled:opacity-40"
                   title={t("jumpFwdTitle", { n: jumpBeats })}
                 >
                   »
-                </button>
-              </Group>
-
-              <Group label={t("loop")}>
+                </PadButton>
+                </Group>
+                </>
+              )}
+              {tool === "bpm" && (
+                <>
+                <Group label={t("gridLabel")}>
+                <div className="flex flex-col gap-1">
+                  {/* Fila 1: TAP · quantize · octava · reanálisis guiado.
+                      A la derecha, el BPM BASE de la pista: es el que define
+                      la rejilla y NO es el pitch (el pitch va en el fader). */}
+                  <div className="flex items-center gap-0.5">
+                    <PadButton
+                      size="text"
+                      onClick={onTapBeat}
+                      disabled={!objectUrl}
+                      className="active:bg-orange-400 active:text-black"
+                      title={t("tapTitle")}
+                    >
+                      {t("tap")}
+                    </PadButton>
+                    <PadButton
+                      size="sm"
+                      led
+                      active={quantize}
+                      color="#a78bfa"
+                      onClick={() => setQuantize((q) => !q)}
+                      disabled={!objectUrl}
+                      title={t("quantizeTitle")}
+                    >
+                      Q
+                    </PadButton>
+                    <span className="w-px h-5 bg-neutral-800 mx-0.5" />
+                    <PadButton
+                      onClick={() => scaleGrid(0.5)}
+                      disabled={!bpm}
+                      title={t("gridHalveTitle")}
+                    >
+                      ÷2
+                    </PadButton>
+                    <PadButton
+                      onClick={() => scaleGrid(2)}
+                      disabled={!bpm}
+                      title={t("gridDoubleTitle")}
+                    >
+                      ×2
+                    </PadButton>
+                    <PadButton
+                      onClick={regridFromManual}
+                      disabled={!bpm || !!analyzing}
+                      title={t("gridRegridTitle")}
+                      className={
+                        analyzing === "regrid"
+                          ? "bg-orange-400 border-orange-300 text-black animate-pulse"
+                          : ""
+                      }
+                    >
+                      ⟳
+                    </PadButton>
+                    <span
+                      className="ml-auto pl-1 w-10 shrink-0 text-right text-[10px] text-neutral-400 tabular-nums"
+                      title={t("gridBaseBpmTitle")}
+                    >
+                      {bpm ? `${bpm.toFixed(2)}` : "—"}
+                    </span>
+                  </div>
+                  {/* Fila 2: los dos ejes del ajuste manual.
+                      Izquierda: mover la rejilla (fase). Derecha: separar o
+                      juntar los beats (BPM base de la pista). */}
+                  <div className="flex items-end gap-1.5">
+                    <Cluster
+                      label={t("gridPhaseLabel")}
+                      title={t("gridPhaseTitle")}
+                    >
+                      <PadButton
+                        onClick={() => nudgeGrid(-GRID_NUDGE_COARSE)}
+                        disabled={!bpm}
+                        title={t("gridPhaseBackCoarseTitle")}
+                      >
+                        «
+                      </PadButton>
+                      <PadButton
+                        onClick={() => nudgeGrid(-GRID_NUDGE_FINE)}
+                        disabled={!bpm}
+                        title={t("gridPhaseBackFineTitle")}
+                      >
+                        ‹
+                      </PadButton>
+                      <PadButton
+                        onClick={() => nudgeGrid(GRID_NUDGE_FINE)}
+                        disabled={!bpm}
+                        title={t("gridPhaseFwdFineTitle")}
+                      >
+                        ›
+                      </PadButton>
+                      <PadButton
+                        onClick={() => nudgeGrid(GRID_NUDGE_COARSE)}
+                        disabled={!bpm}
+                        title={t("gridPhaseFwdCoarseTitle")}
+                      >
+                        »
+                      </PadButton>
+                    </Cluster>
+                    <Cluster
+                      label={t("gridTempoLabel")}
+                      title={t("gridTempoTitle")}
+                    >
+                      <PadButton
+                        onClick={() => stretchGrid(-GRID_BPM_COARSE)}
+                        disabled={!bpm}
+                        title={t("gridTempoDownCoarseTitle")}
+                        className="tracking-tighter"
+                      >
+                        −−
+                      </PadButton>
+                      <PadButton
+                        onClick={() => stretchGrid(-GRID_BPM_FINE)}
+                        disabled={!bpm}
+                        title={t("gridTempoDownFineTitle")}
+                      >
+                        −
+                      </PadButton>
+                      <PadButton
+                        onClick={() => stretchGrid(GRID_BPM_FINE)}
+                        disabled={!bpm}
+                        title={t("gridTempoUpFineTitle")}
+                      >
+                        +
+                      </PadButton>
+                      <PadButton
+                        onClick={() => stretchGrid(GRID_BPM_COARSE)}
+                        disabled={!bpm}
+                        title={t("gridTempoUpCoarseTitle")}
+                        className="tracking-tighter"
+                      >
+                        ++
+                      </PadButton>
+                    </Cluster>
+                  </div>
+                </div>
+                </Group>
+                <Group label={t("structureLabel")}>
+                <div className="flex flex-col gap-1">
+                  {/* Fila 1: desplazar la frase + tamaño de frase */}
+                  <div className="flex items-center gap-0.5">
+                    <PadButton
+                      onClick={() => shiftPhrase(-Math.max(1, phraseSize / 2))}
+                      disabled={!structure}
+                      title={t("phraseBackCoarseTitle", {
+                        n: Math.max(1, phraseSize / 2),
+                      })}
+                    >
+                      «
+                    </PadButton>
+                    <PadButton
+                      onClick={() => shiftPhrase(-1)}
+                      disabled={!structure}
+                      title={t("phraseBackFineTitle")}
+                    >
+                      ‹
+                    </PadButton>
+                    <PadButton
+                      onClick={() => shiftPhrase(1)}
+                      disabled={!structure}
+                      title={t("phraseFwdFineTitle")}
+                    >
+                      ›
+                    </PadButton>
+                    <PadButton
+                      onClick={() => shiftPhrase(Math.max(1, phraseSize / 2))}
+                      disabled={!structure}
+                      title={t("phraseFwdCoarseTitle", {
+                        n: Math.max(1, phraseSize / 2),
+                      })}
+                    >
+                      »
+                    </PadButton>
+                    <span className="w-px h-5 bg-neutral-800 mx-0.5" />
+                    <select
+                      value={phraseSize}
+                      onChange={(e) => onPhraseSize?.(Number(e.target.value))}
+                      className="h-7 w-11 shrink-0 bg-neutral-800 border border-neutral-700 rounded-lg px-0.5"
+                      title={t("phraseSizeTitle")}
+                    >
+                      {PHRASE_SIZES.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* Fila 2: relanzar la detección, volver a lo detectado y
+                      el desplazamiento actual (ancho fijo) */}
+                  <div className="flex items-center gap-0.5">
+                    <PadButton
+                      onClick={redetectStructure}
+                      disabled={!bandLow || !beats.length}
+                      title={t("structureRedetectTitle")}
+                    >
+                      ⟳
+                    </PadButton>
+                    <PadButton
+                      onClick={resetPhrase}
+                      disabled={!structure?.manual}
+                      title={t("phraseResetTitle")}
+                    >
+                      ↺
+                    </PadButton>
+                    <span
+                      className={`ml-auto pl-1 w-10 shrink-0 text-right text-[10px] tabular-nums ${
+                        structure?.manual ? "text-amber-300" : "text-neutral-400"
+                      }`}
+                      title={t("phraseOffsetTitle")}
+                    >
+                      {structure ? `+${structure.phraseOffset}` : "—"}
+                    </span>
+                  </div>
+                </div>
+                </Group>
+                </>
+              )}
+              {tool === "loops" && (
+                <>
+                <Group label={t("loop")}>
                 <div className="flex flex-col gap-1">
                   {/* Fila 1: marcar el loop a mano y loops automáticos */}
                   <div className="flex items-center gap-0.5">
-                    <button
+                    <PadButton
+                      size="md"
+                      led
+                      active={loopIn != null}
+                      color="#38bdf8"
                       onClick={setLoopInNow}
                       disabled={!objectUrl}
-                      className={`h-7 w-8 shrink-0 rounded-lg border text-[11px] font-semibold disabled:opacity-40 ${
-                        loopIn != null
-                          ? "bg-sky-500/30 border-sky-500/50 text-sky-300"
-                          : "bg-neutral-800 border-neutral-700 text-neutral-300"
-                      }`}
                       title={t("loopInTitle")}
                     >
                       {t("loopIn")}
-                    </button>
-                    <button
+                    </PadButton>
+                    <PadButton
+                      size="md"
+                      led
+                      active={loopOut != null}
+                      color="#38bdf8"
                       onClick={setLoopOutNow}
                       disabled={!objectUrl || loopIn == null}
-                      className={`h-7 w-8 shrink-0 rounded-lg border text-[11px] font-semibold disabled:opacity-40 ${
-                        loopOut != null
-                          ? "bg-sky-500/30 border-sky-500/50 text-sky-300"
-                          : "bg-neutral-800 border-neutral-700 text-neutral-300"
-                      }`}
                       title={t("loopOutTitle")}
                     >
                       {t("loopOut")}
-                    </button>
-                    <button
+                    </PadButton>
+                    <PadButton
+                      size="sm"
+                      led
+                      active={loopOn}
                       onClick={toggleLoop}
                       disabled={loopIn == null || loopOut == null}
-                      className={`w-7 h-7 shrink-0 rounded-lg border font-semibold disabled:opacity-40 ${
-                        loopOn
-                          ? "bg-emerald-500 border-emerald-400 text-black"
-                          : "bg-neutral-800 border-neutral-700 text-neutral-300"
-                      }`}
                       title={t("loopToggleTitle")}
                     >
                       ⟳
-                    </button>
+                    </PadButton>
                     <span className="w-px h-5 bg-neutral-800 mx-0.5" />
                     {AUTO_LOOP_SIZES.map((n) => (
-                      <GridBtn
+                      <PadButton
                         key={n}
                         onClick={() => autoLoop(n)}
                         disabled={!objectUrl || !bpm}
                         title={t("loopAutoTitle", { n })}
                       >
                         {n}
-                      </GridBtn>
+                      </PadButton>
                     ))}
                   </div>
                   {/* Fila 2: mover el loop y doblar/partir su longitud.
                       A la derecha, la longitud actual en beats. */}
                   <div className="flex items-center gap-0.5">
-                    <GridBtn
+                    <PadButton
                       onClick={() => moveLoopBy(-1)}
                       disabled={!loopOut}
                       title={t("loopMoveBackTitle")}
                     >
                       «
-                    </GridBtn>
-                    <GridBtn
+                    </PadButton>
+                    <PadButton
                       onClick={() => moveLoopBy(1)}
                       disabled={!loopOut}
                       title={t("loopMoveFwdTitle")}
                     >
                       »
-                    </GridBtn>
+                    </PadButton>
                     <span className="w-px h-5 bg-neutral-800 mx-0.5" />
-                    <GridBtn
+                    <PadButton
                       onClick={() => resizeLoopBy(0.5)}
                       disabled={!loopOut}
                       title={t("loopHalveTitle")}
                     >
                       ÷2
-                    </GridBtn>
-                    <GridBtn
+                    </PadButton>
+                    <PadButton
                       onClick={() => resizeLoopBy(2)}
                       disabled={!loopOut}
                       title={t("loopDoubleTitle")}
                     >
                       ×2
-                    </GridBtn>
+                    </PadButton>
                     <span
-                      className="ml-auto pl-1.5 w-12 shrink-0 text-right text-[10px] text-neutral-400 tabular-nums"
+                      className="ml-auto pl-1 w-10 shrink-0 text-right text-[10px] text-neutral-400 tabular-nums"
                       title={t("loopLengthTitle")}
                     >
                       {loopLabel}
                     </span>
                   </div>
                 </div>
-              </Group>
-              </div>
-
-              <div className="flex flex-wrap items-stretch gap-2">
-              {/* Loop roll: bucle momentáneo mientras se mantiene pulsado. Al
-                  soltar, la pista sigue donde estaría sin el roll. */}
-              <Group label={t("rollLabel")}>
-                {ROLL_SIZES.map((n) => (
-                  <button
-                    key={n}
-                    onPointerDown={(e) => {
-                      e.preventDefault();
-                      // La captura garantiza recibir el "soltar" aunque el
-                      // puntero se salga del pad. Si el navegador no la da,
-                      // el roll funciona igual.
-                      try {
-                        e.currentTarget.setPointerCapture?.(e.pointerId);
-                      } catch {
-                        // puntero no capturable
-                      }
-                      startRoll(n);
-                    }}
-                    onPointerUp={endRoll}
-                    onPointerCancel={endRoll}
-                    onLostPointerCapture={endRoll}
-                    disabled={!objectUrl || !bpm}
-                    className={`w-8 h-7 shrink-0 grid place-items-center rounded-lg border text-[10px] font-bold leading-none disabled:opacity-40 ${
-                      rolling?.beats === n
-                        ? "bg-amber-400 border-amber-300 text-black"
-                        : "bg-neutral-800 border-neutral-700 text-neutral-300"
-                    }`}
-                    title={t("rollSizeTitle", { n: beatsLabel(n) })}
-                  >
-                    {beatsLabel(n)}
-                  </button>
-                ))}
-              </Group>
-
-              {/* Loops guardados de la pista: se guardan con la pista y siguen
-                  ahí al recargar la app. */}
-              <Group label={t("savedLoopsLabel")} className="relative">
-                <button
+                </Group>
+                <Group label={t("savedLoopsLabel")} className="relative">
+                <PadButton
                   onClick={saveCurrentLoop}
                   disabled={
                     loopIn == null ||
                     loopOut == null ||
                     savedLoops.length >= MAX_SAVED_LOOPS
                   }
-                  className="w-7 h-7 shrink-0 rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 font-bold disabled:opacity-40"
                   title={t("savedLoopSaveTitle")}
                 >
                   +
-                </button>
+                </PadButton>
                 <select
                   value={savedLoops.length ? savedLoopIdx : ""}
                   onChange={(e) => setSavedLoopIdx(Number(e.target.value))}
@@ -1876,14 +2110,14 @@ function Deck({
                     ))
                   )}
                 </select>
-                <GridBtn
+                <PadButton
                   onClick={() => recallSavedLoop()}
                   disabled={!savedLoops.length}
                   title={t("savedLoopRecallTitle")}
                 >
                   ⟳
-                </GridBtn>
-                <GridBtn
+                </PadButton>
+                <PadButton
                   onClick={() =>
                     setNaming({
                       kind: "loop",
@@ -1895,14 +2129,14 @@ function Deck({
                   title={t("savedLoopRenameTitle")}
                 >
                   ✎
-                </GridBtn>
-                <GridBtn
+                </PadButton>
+                <PadButton
                   onClick={() => deleteSavedLoop(savedLoopIdx)}
                   disabled={!savedLoops.length}
                   title={t("savedLoopDeleteTitle")}
                 >
                   ✕
-                </GridBtn>
+                </PadButton>
                 {naming?.kind === "loop" && (
                   <NameEditor
                     label={t("savedLoopNameLabel")}
@@ -1918,76 +2152,41 @@ function Deck({
                     onCancel={() => setNaming(null)}
                   />
                 )}
-              </Group>
-              </div>
-            </div>
+                </Group>
+                <Group label={t("rollLabel")}>
+                {ROLL_SIZES.map((n) => (
+                  <PadButton
+                    key={n}
+                    size="md"
+                    led
+                    active={rolling?.beats === n}
+                    color="#fbbf24"
+                    className="text-[10px]"
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      // La captura garantiza recibir el "soltar" aunque el
+                      // puntero se salga del pad. Si el navegador no la da,
+                      // el roll funciona igual.
+                      try {
+                        e.currentTarget.setPointerCapture?.(e.pointerId);
+                      } catch {
+                        // puntero no capturable
+                      }
+                      startRoll(n);
+                    }}
+                    onPointerUp={endRoll}
+                    onPointerCancel={endRoll}
+                    onLostPointerCapture={endRoll}
+                    disabled={!objectUrl || !bpm}
+                    title={t("rollSizeTitle", { n: beatsLabel(n) })}
+                  >
+                    {beatsLabel(n)}
+                  </PadButton>
+                ))}
+                </Group>
+                </>
+              )}              </div>
           </div>
-          <div className="flex flex-col gap-2 w-24 shrink-0 items-center">
-            {/* Pitch + Bend */}
-            <div className="flex flex-col items-center">
-              <span className="text-xs text-neutral-400 w-full text-center truncate tabular-nums">
-                {t("pitch")}: {livePitch.toFixed(2)}%
-              </span>
-              <span className="text-[10px] text-sky-300 w-full text-center truncate tabular-nums">
-                {t("bend")} {bendPct > 0 ? "+" : ""}
-                {bendPct.toFixed(2)}%
-                {keyLock && " · 🔒"}
-              </span>
-              {/* Como un plato Technics: arriba más lento (−), abajo más rápido (+) */}
-              <Fader
-                orientation="vertical"
-                min={-pitchRange}
-                max={pitchRange}
-                step={0.01}
-                value={pitchPct}
-                onChange={(e) => onPitchChange(e.target.value)}
-                length={150}
-                fill="center"
-                ticks={9}
-                invert={true}
-                accent="#7dd3fc"
-                resetValue={0}
-                title={t("pitchFaderTitle")}
-                ariaLabel={t("pitch")}
-              />
-            </div>
-            <div className="flex items-center justify-center gap-1">
-              <button
-                onMouseDown={() => startBend(-1)}
-                onMouseUp={releaseBend}
-                onMouseLeave={releaseBend}
-                onTouchStart={() => startBend(-1)}
-                onTouchEnd={releaseBend}
-                className="px-2.5 py-1 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs"
-                title={t("bendMinusTitle")}
-              >
-                −
-              </button>
-              <button
-                onMouseDown={() => startBend(+1)}
-                onMouseUp={releaseBend}
-                onMouseLeave={releaseBend}
-                onTouchStart={() => startBend(+1)}
-                onTouchEnd={releaseBend}
-                className="px-2.5 py-1 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs"
-                title={t("bendPlusTitle")}
-              >
-                +
-              </button>
-            </div>
-            {/* Rango del pitch, junto al fader al que afecta */}
-            <select
-              value={pitchRange}
-              onChange={onRangeChange}
-              className="bg-neutral-800 border border-neutral-700 rounded-lg px-1 py-1 text-xs text-neutral-300"
-              title={t("rangeTitle")}
-            >
-              <option value={8}>±8%</option>
-              <option value={16}>±16%</option>
-              <option value={50}>±50%</option>
-            </select>
-          </div>
-        </div>
         <audio
           ref={audioRef}
           onLoadedMetadata={onLoaded}
@@ -2002,14 +2201,17 @@ function Deck({
 
 export default memo(Deck);
 
-// Grupo de herramientas del deck: etiqueta pequeña + botones en una caja
+// Caja de herramientas dentro de una pestaña: etiqueta pequeña + sus botones.
+// Cada pestaña agrupa dos o tres de estas.
 function Group({ label, className = "", children }) {
   return (
     <div
-      className={`flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900/40 px-2 py-1 min-w-0 ${className}`}
+      className={`flex flex-col gap-1 rounded-lg border border-neutral-800 bg-neutral-900/40 px-1.5 py-1 min-w-0 ${className}`}
     >
       <Tiny className="text-[9px]">{label}</Tiny>
-      <div className="flex items-center gap-1">{children}</div>
+      {/* flex-1 + items-center: en una pestaña con cajas de distinto alto, las
+          bajitas centran sus botones en vez de quedarse pegadas arriba */}
+      <div className="flex flex-1 items-center gap-1">{children}</div>
     </div>
   );
 }
@@ -2035,61 +2237,6 @@ function Tiny({ className = "", children }) {
     >
       {children}
     </span>
-  );
-}
-
-// Botón cuadrado de la caja de rejilla (ancho fijo: nada se mueve al cambiar
-// de estado o de idioma)
-function GridBtn({ onClick, disabled, title, className = "", children }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={`w-6 h-7 shrink-0 grid place-items-center rounded-lg border bg-neutral-800 border-neutral-700 text-neutral-300 text-[11px] font-bold leading-none disabled:opacity-40 ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-// Pad de hot cue. Ancho y alto FIJOS, y la línea de la etiqueta se pinta
-// siempre (aunque esté vacía): así ponerle nombre a un cue —o cambiar de
-// idioma— no mueve nada de sitio.
-//
-// Click fija o salta · click derecho o Shift+click borra · doble click abre el
-// editor de nombre.
-function CuePad({ index, cue, disabled, onTrigger, onClear, onRename, title }) {
-  const color = HOT_CUE_COLORS[index] || "#ffffff";
-  return (
-    <button
-      onClick={(e) => (e.shiftKey ? onClear() : onTrigger())}
-      onDoubleClick={(e) => {
-        e.preventDefault();
-        if (cue) onRename();
-      }}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        onClear();
-      }}
-      disabled={disabled}
-      title={title}
-      className="w-12 h-9 shrink-0 grid content-center overflow-hidden rounded-lg border leading-none disabled:opacity-40"
-      style={
-        cue
-          ? { backgroundColor: color, borderColor: color, color: "#000" }
-          : {
-              backgroundColor: "rgb(38 38 38)",
-              borderColor: "rgb(64 64 64)",
-              color: "rgb(163 163 163)",
-            }
-      }
-    >
-      <span className="text-[11px] font-bold">{index + 1}</span>
-      <span className="px-0.5 text-[8px] truncate opacity-80">
-        {cue?.name || "\u00A0"}
-      </span>
-    </button>
   );
 }
 

@@ -21,3 +21,12 @@ export const CUE_NAME_MAX = 10;
 
 // Tope de loops guardados por pista
 export const MAX_SAVED_LOOPS = 8;
+
+// === Pitch ===
+// Rangos del fader de pitch (± %) y cuánto estira el pitch bend. Los dos se
+// eligen en ⚙ Configuración y valen para los dos decks. El rango es el de
+// PARTIDA: el sync puede ensancharlo solo si necesita más recorrido.
+export const PITCH_RANGES = [8, 16, 50];
+export const BEND_RANGES = [0.5, 1, 2, 4, 8];
+export const DEFAULT_PITCH_RANGE = 8;
+export const DEFAULT_BEND_RANGE = 4;

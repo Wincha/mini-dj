@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n/context";
+import { GLOSS, PRESS, SKIN } from "./PadButton";
 import {
   camelotSortIndex,
   harmonicRelation,
@@ -22,6 +23,13 @@ function formatDuration(s) {
 // Nombre a mostrar: título de las etiquetas si lo hay, si no el archivo
 function displayTitle(track) {
   return track.title || track.name;
+}
+
+// Formato del archivo (MP3, WAV, FLAC…). Se saca de la extensión del nombre,
+// que es lo único fiable: el `type` del File viene vacío en bastantes casos.
+function fileFormat(track) {
+  const ext = /\.([a-z0-9]{2,4})$/i.exec(track.name || "");
+  return ext ? ext[1].toUpperCase() : "?";
 }
 
 // Miniatura de carátula: un solo object URL por pista, reciclado mientras la
@@ -244,7 +252,7 @@ function TrackList({
             </select>
             <button
               onClick={() => setSortDir((d) => -d)}
-              className="px-2 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-sm text-neutral-300 hover:bg-neutral-700"
+              className={`px-2 py-1.5 rounded-lg border text-sm text-neutral-300 ${SKIN} ${GLOSS} ${PRESS}`}
               title={t("reverseTitle")}
             >
               {sortDir === 1 ? "↑" : "↓"}
@@ -269,7 +277,7 @@ function TrackList({
           {tracks.length > 0 && (
             <button
               onClick={exportList}
-              className="px-3 py-2 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-300 text-sm hover:bg-neutral-700"
+              className={`px-3 py-2 rounded-xl border text-neutral-300 text-sm ${SKIN} ${GLOSS} ${PRESS}`}
               title={t("exportTitle")}
             >
               {t("export")}
@@ -277,7 +285,7 @@ function TrackList({
           )}
           <button
             onClick={() => inputRef.current?.click()}
-            className="px-4 py-2 rounded-xl bg-neutral-200 text-neutral-900 text-sm font-semibold hover:bg-white/90"
+            className={`px-4 py-2 rounded-xl bg-gradient-to-b from-white to-neutral-300 text-neutral-900 text-sm font-semibold ${GLOSS} active:translate-y-px active:shadow-none`}
           >
             {t("addSongs")}
           </button>
@@ -301,7 +309,33 @@ function TrackList({
           {t("noMatch", { query })}
         </p>
       ) : (
-        <ul className="divide-y divide-neutral-800 max-h-64 overflow-y-auto">
+        <>
+          {/* Cabecera: las mismas anchuras que las filas, en una línea muy
+              fina. `pr-4` iguala el hueco que deja la barra de la lista. */}
+          <div
+            data-testid="track-header"
+            className="flex items-center gap-x-3 pb-1 pr-4 text-[9px] uppercase tracking-wide text-neutral-500 border-b border-neutral-800"
+          >
+            <span className="w-12 shrink-0" />
+            <span className="w-14 shrink-0 text-right truncate" title={t("csvDuration")}>
+              {t("csvDuration")}
+            </span>
+            <span className="w-24 shrink-0 text-center">{t("bpm")}</span>
+            <span className="w-[6.5rem] shrink-0 text-center">{t("colDeck")}</span>
+            {showArtwork && <span className="w-8 shrink-0" />}
+            <span className="flex-1 min-w-24 truncate">{t("csvName")}</span>
+            {showKey && (
+              <span className="w-20 shrink-0 text-center truncate">{t("sortKey")}</span>
+            )}
+            <span className="w-16 shrink-0 text-right truncate hidden sm:block">
+              {t("csvSize")}
+            </span>
+            <span className="w-7 shrink-0" />
+          </div>
+          {/* `pr-2`: con las barras de desplazamiento superpuestas (macOS, y
+              Windows con la opción puesta) la barra se comía el botón de
+              quitar. Este hueco lo deja siempre libre. */}
+          <ul className="divide-y divide-neutral-800 max-h-64 overflow-y-auto pr-2">
           {visibleTracks.map((track) => {
             const art = showArtwork ? artworkUrl(track) : null;
             const badge = showKey ? keyBadge(track) : null;
@@ -310,6 +344,9 @@ function TrackList({
                 key={track.id}
                 className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2"
               >
+                {/* Orden de la fila, pensado para pinchar: dónde ha sonado
+                    ya · cuánto dura · a qué BPM · cargarla · y por último qué
+                    es (carátula, título, artista y su ficha). */}
                 {/* Badges de deck (actual en color, historial en gris) */}
                 <div className="flex items-center gap-1 w-12 shrink-0">
                   {["A", "B"].map((side) => {
@@ -330,55 +367,9 @@ function TrackList({
                     );
                   })}
                 </div>
-                {/* Carátula: hueco fijo de 32 px. Sin carátula se pinta un
-                    marcador discreto, así las filas nunca se descuadran. */}
-                {showArtwork &&
-                  (art ? (
-                    <img
-                      src={art}
-                      alt=""
-                      loading="lazy"
-                      className="w-8 h-8 shrink-0 rounded object-cover border border-neutral-700"
-                    />
-                  ) : (
-                    <div
-                      className="w-8 h-8 shrink-0 rounded border border-neutral-800 bg-neutral-800/50 grid place-items-center text-neutral-600 text-xs"
-                      title={t("noArtworkTitle")}
-                      aria-hidden
-                    >
-                      ♪
-                    </div>
-                  ))}
-                {/* Título + artista: dos líneas siempre, aunque no haya
-                    artista, para que todas las filas midan lo mismo */}
-                <div className="flex-1 min-w-24 grid">
-                  <span className="truncate text-sm leading-tight">
-                    {displayTitle(track)}
-                  </span>
-                  <span className="truncate text-[11px] leading-tight text-neutral-500">
-                    {track.artist || " "}
-                  </span>
-                </div>
-                {/* Columnas alineadas */}
-                <span className="w-16 text-right text-xs text-neutral-500 tabular-nums shrink-0 hidden sm:block">
-                  {formatSize(track.size)}
-                </span>
-                <span className="w-12 text-right text-xs text-neutral-500 tabular-nums shrink-0">
+                <span className="w-14 text-right text-xs text-neutral-400 tabular-nums shrink-0">
                   {formatDuration(track.duration)}
                 </span>
-                {showKey && (
-                  <span className="w-20 shrink-0 text-center">
-                    <span
-                      className={`inline-block w-full px-1.5 py-0.5 rounded text-[10px] font-semibold truncate ${badge.className}`}
-                      title={badge.title}
-                    >
-                      {keyLabel(
-                        track.musicalKey?.pitchClass,
-                        track.musicalKey?.mode
-                      ) || t("keyNone")}
-                    </span>
-                  </span>
-                )}
                 <span className="w-24 shrink-0 text-center">
                   {track.bpm != null ? (
                     <span className="inline-block w-full px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold tabular-nums truncate">
@@ -392,7 +383,7 @@ function TrackList({
                     </span>
                   )}
                 </span>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex w-[6.5rem] shrink-0 items-center justify-center gap-2">
                   {["A", "B"].map((side) => {
                     const blocked = deckBlocked[side];
                     return (
@@ -415,7 +406,7 @@ function TrackList({
                           className={`px-3 py-1 rounded-lg border text-xs font-semibold whitespace-nowrap ${
                             blocked
                               ? "bg-neutral-800/60 border-neutral-700 text-neutral-600 opacity-60 cursor-not-allowed"
-                              : loadBtnClass[side]
+                              : `${loadBtnClass[side]} ${GLOSS} active:translate-y-px active:shadow-none`
                           }`}
                         >
                           {t("loadToDeck", { side })}
@@ -423,18 +414,69 @@ function TrackList({
                       </span>
                     );
                   })}
-                  <button
-                    onClick={() => onRemoveTrack(track.id)}
-                    className="px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-400 text-xs hover:text-red-400 hover:border-red-500/50"
-                    title={t("removeTitle")}
-                  >
-                    ✕
-                  </button>
                 </div>
+                {/* Carátula: hueco fijo de 32 px. Sin carátula se pinta un
+                    marcador discreto, así las filas nunca se descuadran. */}
+                {showArtwork &&
+                  (art ? (
+                    <img
+                      src={art}
+                      alt=""
+                      loading="lazy"
+                      className="w-8 h-8 shrink-0 rounded object-cover border border-neutral-700"
+                    />
+                  ) : (
+                    <div
+                      className="w-8 h-8 shrink-0 rounded border border-neutral-800 bg-neutral-800/50 grid place-items-center overflow-hidden px-0.5 text-neutral-500 text-[8px] font-bold tracking-tight"
+                      title={t("noArtworkFormatTitle", {
+                        format: fileFormat(track),
+                      })}
+                    >
+                      {fileFormat(track)}
+                    </div>
+                  ))}
+                {/* Título + artista: dos líneas siempre, aunque no haya
+                    artista, para que todas las filas midan lo mismo */}
+                <div className="flex-1 min-w-24 grid">
+                  <span
+                    data-testid="track-title"
+                    className="truncate text-sm leading-tight"
+                  >
+                    {displayTitle(track)}
+                  </span>
+                  <span className="truncate text-[11px] leading-tight text-neutral-500">
+                    {track.artist || " "}
+                  </span>
+                </div>
+                {/* Ficha de la pista, pegada a la derecha: tonalidad y tamaño */}
+                {showKey && (
+                  <span className="w-20 shrink-0 text-center">
+                    <span
+                      className={`inline-block w-full px-1.5 py-0.5 rounded text-[10px] font-semibold truncate ${badge.className}`}
+                      title={badge.title}
+                    >
+                      {keyLabel(
+                        track.musicalKey?.pitchClass,
+                        track.musicalKey?.mode
+                      ) || t("keyNone")}
+                    </span>
+                  </span>
+                )}
+                <span className="w-16 text-right text-xs text-neutral-500 tabular-nums shrink-0 hidden sm:block">
+                  {formatSize(track.size)}
+                </span>
+                <button
+                  onClick={() => onRemoveTrack(track.id)}
+                  className={`w-7 h-6 shrink-0 grid place-items-center rounded-lg border text-neutral-400 text-xs ${SKIN} ${GLOSS} ${PRESS} hover:text-red-400 hover:border-red-500/50`}
+                  title={t("removeTitle")}
+                >
+                  ✕
+                </button>
               </li>
             );
           })}
-        </ul>
+          </ul>
+        </>
       )}
 
       {/* Leyenda: solo aparece cuando hay una pista sonando con tonalidad */}

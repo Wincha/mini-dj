@@ -140,3 +140,67 @@ export function transpose(chords, semitones) {
     })
   )
 }
+
+// === Energía de graves sintética (para el análisis de estructura) ===
+
+/**
+ * Serie de energía de graves como la que devuelve analyzeWaveform en
+ * `bandLow`: un golpe con cola en cada beat CON kick, y un bajo sostenido
+ * (mucho nivel, ningún ataque) en los tramos sin kick. Es justo el caso que
+ * tiene que distinguir la detección.
+ *
+ * @param bpm      tempo de la rejilla
+ * @param seconds  duración
+ * @param offset   posición del primer beat, en segundos
+ * @param rate     muestras por segundo (analyzeWaveform da ~80)
+ * @param hasKick  (índice de beat) => bool
+ */
+export function makeLowBandEnergy({
+  bpm,
+  seconds,
+  offset = 0,
+  rate = 80,
+  hasKick = () => true,
+  kickLevel = 0.9,
+  padLevel = 0.3,
+  decaySec = 0.05,
+  noise = 0.004,
+  seed = 11,
+} = {}) {
+  const n = Math.round(seconds * rate)
+  const interval = 60 / bpm
+  const beats = Math.max(0, Math.floor((seconds - offset) / interval))
+  const rnd = mulberry32(seed)
+
+  // Nivel de fondo: bajo sostenido donde no hay kick, casi nada donde sí
+  const base = new Float32Array(n).fill(0.02)
+  for (let b = 0; b < beats; b++) {
+    if (hasKick(b)) continue
+    const from = Math.round((offset + b * interval) * rate)
+    const to = Math.min(n, Math.round((offset + (b + 1) * interval) * rate))
+    for (let i = Math.max(0, from); i < to; i++) base[i] = padLevel
+  }
+  // Suavizado de 0,4 s: el bajo entra y sale con rampa, sin escalón que
+  // pudiera parecer un ataque
+  const win = Math.max(1, Math.round(0.4 * rate))
+  const prefix = new Float64Array(n + 1)
+  for (let i = 0; i < n; i++) prefix[i + 1] = prefix[i] + base[i]
+  const out = new Float32Array(n)
+  for (let i = 0; i < n; i++) {
+    const a = Math.max(0, i - win)
+    const b = Math.min(n, i + win + 1)
+    out[i] = (prefix[b] - prefix[a]) / (b - a) + rnd() * noise
+  }
+
+  // Golpes: ataque en una muestra y cola exponencial
+  const tail = Math.round(0.25 * rate)
+  for (let b = 0; b < beats; b++) {
+    if (!hasKick(b)) continue
+    const at = Math.round((offset + b * interval) * rate)
+    for (let k = 0; k <= tail; k++) {
+      const i = at + k
+      if (i >= 0 && i < n) out[i] += kickLevel * Math.exp(-k / (decaySec * rate))
+    }
+  }
+  return out
+}

@@ -7,7 +7,7 @@ export default {
   masterSync: "MASTER SYNC",
   masterSyncTitle:
     "Master sync: SYNC duten deckek BPM hau jarraitzen dute beste deckarena beharrean",
-  masterBpmTitle: "Master sync-aren BPMa",
+  masterBpmTitle: "Master sync-aren BPMa. Sakatu gainean eta arrastatu gora edo behera, edo erabili gurpila, teklatu gabe doitzeko (Shift-ekin, finago)",
   bpm: "BPM",
   language: "Hizkuntza",
 
@@ -37,8 +37,6 @@ export default {
   updateChecking: "Eguneratzeak bilatzen…",
   updateUpToDate: "Azken bertsioa duzu",
   updateError: "Ezin izan da eguneratzerik dagoen egiaztatu",
-  follow: "🔁 Jarraitu",
-  followTitle: "Erreprodukzioa berriro jarraitu",
   play: "▶︎ Play",
   pause: "❚❚ Pausa",
   stop: "■ Stop",
@@ -173,7 +171,6 @@ export default {
   keyCompatibleTitle: "Entzuten ari den pistarekin bateragarria",
   keyClashTitle: "Ez dator bat entzuten ari den pistaren tonalitatearekin",
   keyLegend: "{key} tonalitatean ari da: morez, harmonikoki bateragarriak diren pistak.",
-  noArtworkTitle: "Azalik gabe",
   showArtwork: "Azalak",
   showArtworkTitle: "Erakutsi edo ezkutatu azalen miniaturak",
   showArtworkNote: "Ezkutatzeak pantailan lekua irabazten du; azalak gordeta jarraitzen dute.",
@@ -239,4 +236,87 @@ export default {
   logClear: "Hustu",
   logFile: "Mahaigaineko aplikazioan hemen ere gordetzen da: {path}",
   versionTitle: "Mini DJ-ren bertsioa",
+
+  // Estructura de la pista y aviso de fin
+  structureLabel: "Egitura",
+  phraseBackCoarseTitle: "Atzeratu esaldia {n} kick",
+  phraseBackFineTitle: "Atzeratu esaldia kick 1",
+  phraseFwdFineTitle: "Aurreratu esaldia kick 1",
+  phraseFwdCoarseTitle: "Aurreratu esaldia {n} kick",
+  phraseSizeTitle: "Esaldiaren tamaina kick-etan. ⚙ Konfigurazioan dagoen ezarpen bera da",
+  structureRedetectTitle: "Egitura berriro detektatu uneko saretaren gainean, eskuz jarritako esaldi-desplazamendua errespetatuz",
+  phraseResetTitle: "Itzuli esaldi-desplazamendua analisiak aurkitutakora",
+  phraseOffsetTitle: "Uneko esaldi-desplazamendua, kick-etan. Anbar kolorez zuk eskuz jarri duzunean",
+  structureTipInKick: "Erritmoa duen zatian zaude.",
+  structureTipInBreak: "Jaitsiera batean zaude.",
+  structureTipDrop: "Jaitsiera {n} kick barru sartzen da.",
+  structureTipDropBars: "Jaitsiera {n} kick barru sartzen da ({bars} konpas).",
+  structureTipRise: "Erritmoa {n} kick barru itzuliko da.",
+  structureTipRiseBars: "Erritmoa {n} kick barru itzuliko da ({bars} konpas).",
+  structureTipRiseAfter: "Erritmoa {n} kick geroago itzultzen da.",
+  structureTipDropAfter: "Jaitsiera {n} kick geroago sartzen da.",
+  structureTipNoChanges: "Ez dago aldaketa gehiagorik pistaren amaierara arte.",
+  structureTipToEnd: "Pista {n} kick barru amaitzen da.",
+  structureTipPhrase: "{size} kick-eko esaldi baten {pos}. kick-ean zaude.",
+  structureHeading: "Egitura-adierazlea",
+  showStructure: "Erakutsi adierazlea uhinaren gainean",
+  structureNote: "Erritmoa joan arte (▼) eta itzuli arte (▲) falta diren kick-ak zenbatzen ditu, eta esaldiaren barruan non zauden. Behin bakarrik analizatzen da, pista kargatzean.",
+  phraseSizeLabel: "Esaldiaren tamaina",
+  structureUnitLabel: "Zenbatu honela",
+  unitKicks: "Kick-ak",
+  unitBars: "Konpasak",
+  warnAmberLabel: "Anbar abisua (kick)",
+  warnRedLabel: "Abisu gorria (kick)",
+  endWarnHeading: "Pista amaitzeko abisua",
+  endWarnOn: "Abisatu pista amaitzear dagoenean",
+  endWarnNote: "Uhinaren ertza gorriz keinuka hasten da, gero eta setatiago. Pista jotzen ari denean bakarrik, eta geldi sistemaren mugimendu murriztua aktibatuta baduzu.",
+  endWarnModeLabel: "Abisatu honen arabera",
+  endWarnModeSeconds: "Geratzen diren segundoak",
+  endWarnModePercent: "Geratzen den ehunekoa",
+  endWarnValueSeconds: "Segundoak",
+  endWarnValuePercent: "Pistaren %",
+
+  // Pitch (rango del fader y fuerza del bend)
+  pitchHeading: "Pitch-a",
+  bendRangeLabel: "Pitch bend-aren indarra",
+  pitchNote: "Bi deckentzat balio dute. Tartea abiapuntua da: SYNC-ek ibilbide gehiago behar badu, berak zabaltzen du, hau ukitu gabe. Bend-aren indarra deckeko − eta + botoiek tiratzen dutena da.",
+  masterBpmDownTitle: "Jaitsi 1 masterraren BPMa",
+  masterBpmUpTitle: "Igo 1 masterraren BPMa",
+
+  // Pestañas de herramientas del deck
+  toolsPosition: "Kokapena",
+  toolsBpm: "BPM",
+  toolsLoops: "Loop-ak eta roll-ak",
+
+  // Cabecera y formato de archivo de la lista
+  colDeck: "Deck",
+  noArtworkFormatTitle: "Azalik gabe · {format} fitxategia",
+
+  // Resumen de la pista
+  overviewTitle: "Pistaren laburpena: sakatu edo arrastatu mugitzeko. Zati ilunak jaitsierak dira; marra gorriak erritmoa non doan markatzen du eta berdeak non itzultzen den",
+
+  // Pantalla LCD del deck
+  lcdElapsed: "Igarota",
+  lcdRemaining: "Falta",
+  lcdTotal: "Guztira",
+  lcdTrackBpm: "Pistaren BPM",
+  lcdKey: "Tonua",
+  lcdTimeTitle: "Pistaren denbora. Sakatu igarotakoaren eta falta denaren artean txandakatzeko",
+
+  // Marquesina del nombre de la pista
+  marqueeSpeedLabel: "Marka mugikorra",
+  marqueeOff: "Geldi",
+  marqueeSlow: "Motela",
+  marqueeNormal: "Normala",
+  marqueeFast: "Azkarra",
+  marqueeNote: "Izena deckeko pantailan sartzen ez denean, begiztan pasatzen da. Animazioa nabigatzaileak egiten du, ez du CPUrik jaten. Sistemaren mugimendu murriztuarekin geldi geratzen da.",
+
+  // Pantalla del deck: cifras redondeadas o de 14 segmentos
+  lcdHeading: "Deckaren pantaila",
+  lcdFontLabel: "Zifrak",
+  lcdFontRounded: "Biribilduak",
+  lcdFontNote: "Izenburua 5 x 7 puntu-matrizean eta zifrak (denbora, BPM, pitch…) benetako pantaila baten muntaia finkoarekin: zazpi segmentu zenbakiak baino ez doazen tokian eta hamalau ikur bat behar denean. Betiko letrek adina leku hartzen du: aldatzeak ez du ezer mugitzen.",
+  titleFontLabel: "Izenburua",
+  lcdFontLcd: "LCD pantaila",
+  lcdFontDot: "Puntu-matrizea",
 };

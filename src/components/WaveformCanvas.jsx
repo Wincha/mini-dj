@@ -19,6 +19,10 @@ function WaveformCanvas({
   loopOn,
   loopRolling,
   audioRef,
+  endWarnAt = 0,
+  // Ref compartido con el resumen de la pista: aquí se escribe la ventana
+  // visible (0..1) en cada frame, sin pasar por el estado de React.
+  windowRef,
   zoom,
   scroll,
   follow,
@@ -30,10 +34,26 @@ function WaveformCanvas({
 }) {
   const canvasRef = useRef(null);
   const smoothTimeRef = useRef(null);
+  // Preferencia del sistema de movimiento reducido: con ella puesta, el aviso
+  // de fin de pista se queda en un borde fijo en vez de parpadear.
+  const reducedMotionRef = useRef(false);
   // Un Path2D por color de la paleta, reutilizado entre frames: agrupar los
   // píxeles por color deja el dibujado en <=36 rellenos en vez de uno por píxel
   const bandPathsRef = useRef(new Array(PALETTE_SIZE).fill(null));
+  // Tira de onda ya pintada (tres anchos de pantalla) que se va bliteando
+  const stripRef = useRef({ canvas: null, key: "", start: 0 });
   if (!smoothTimeRef.current) smoothTimeRef.current = createSmoothTime();
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => {
+      reducedMotionRef.current = mq.matches;
+    };
+    apply();
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
+  }, []);
 
   // Zoom con la rueda del ratón (listener nativo: React registra wheel como
   // pasivo y no dejaría hacer preventDefault del scroll de la página)
@@ -68,6 +88,102 @@ function WaveformCanvas({
     if (!canvas || !waveData || !waveData.length) return;
 
     const ctx = canvas.getContext("2d");
+    const total = waveData.length;
+
+    // Pinta un tramo de la onda en el lienzo que se le pase: `from` es el
+    // índice (fraccionario) de la primera muestra y `perPx` cuántas muestras
+    // entran en cada píxel. Agrupa por color: como mucho PALETTE_SIZE
+    // rellenos, nunca uno por píxel.
+    const drawWave = (dst, width, height, from, perPx, colored, dur) => {
+      dst.fillStyle = "#171717";
+      dst.fillRect(0, 0, width, height);
+
+      const paths = bandPathsRef.current;
+      if (colored) paths.fill(null);
+      const flatWave = colored ? null : new Path2D();
+
+      const addBar = (x, v, ci) => {
+        if (!colored) {
+          flatWave.rect(x, (1 - v) * height * 0.5, 1, v * height);
+          return;
+        }
+        let path = paths[ci];
+        if (!path) path = paths[ci] = new Path2D();
+        path.rect(x, (1 - v) * height * 0.5, 1, v * height);
+      };
+
+      if (perPx <= 1) {
+        for (let x = 0; x < width; x++) {
+          const idx = Math.floor(from + x * perPx);
+          if (idx < 0 || idx >= total) continue;
+          addBar(x, waveData[idx] || 0, colored ? bandIndex[idx] || 0 : 0);
+        }
+      } else {
+        // Cuando cada píxel abarca varias muestras se recorre el tramo
+        // entero: la altura es el máximo y el color, la media de las bandas.
+        // Muestreando solo una de cada N, el color se enganchaba al patrón
+        // del bombo y la pista entera salía naranja.
+        for (let x = 0; x < width; x++) {
+          const desde = Math.max(0, Math.floor(from + x * perPx));
+          const hasta = Math.min(total, Math.floor(from + (x + 1) * perPx));
+          let peakV = 0;
+          let sumLow = 0;
+          let sumHigh = 0;
+          let n = 0;
+          for (let i = desde; i < hasta; i++) {
+            const a = waveData[i];
+            if (a > peakV) peakV = a;
+            if (colored) {
+              const ci = bandIndex[i];
+              sumLow += (ci / PALETTE_LEVELS) | 0;
+              sumHigh += ci % PALETTE_LEVELS;
+            }
+            n++;
+          }
+          if (!n) continue;
+          const ci = colored
+            ? Math.round(sumLow / n) * PALETTE_LEVELS + Math.round(sumHigh / n)
+            : 0;
+          addBar(x, peakV, ci);
+        }
+      }
+
+      if (colored) {
+        for (let i = 0; i < PALETTE_SIZE; i++) {
+          const path = paths[i];
+          if (!path) continue;
+          dst.fillStyle = palette[i];
+          dst.fill(path);
+        }
+      } else {
+        // Sin datos de bandas: color de medios de la paleta elegida
+        dst.fillStyle = palette[0];
+        dst.fill(flatWave);
+      }
+
+      // Rejilla de beats: va en la tira porque tampoco cambia. A zoom bajo
+      // caben más de mil beats en el ancho y la rejilla acaba tapando la onda
+      // entera de rojo, así que por debajo de 4 px por beat no se dibuja: a
+      // esa escala no sirve para nada.
+      if (dur > 0 && beats && beats.length > 1) {
+        const beatPx = ((beats[1] - beats[0]) / dur) * total / perPx;
+        if (beatPx >= 4) {
+          const desde = from * (dur / total);
+          const hasta = (from + width * perPx) * (dur / total);
+          dst.strokeStyle = "rgba(239,68,68,0.6)";
+          dst.lineWidth = 1;
+          dst.beginPath();
+          for (const tBeat of beats) {
+            if (tBeat < desde) continue;
+            if (tBeat > hasta) break;
+            const x = ((tBeat / dur) * total - from) / perPx;
+            dst.moveTo(x, 0);
+            dst.lineTo(x, height);
+          }
+          dst.stroke();
+        }
+      }
+    };
 
     let lastDraw = 0;
     const drawFrame = (now) => {
@@ -78,18 +194,16 @@ function WaveformCanvas({
       }
       lastDraw = now;
       const rect = canvas.getBoundingClientRect();
-      const w = Math.max(1, rect.width || 600);
-      const h = Math.max(1, rect.height || 80);
+      // REDONDEADO, y esto importa: `canvas.width` guarda enteros, así que
+      // con un ancho fraccionario (el deck no mide un número redondo) la
+      // comparación de abajo nunca se cumplía y el lienzo se reasignaba —es
+      // decir, se reiniciaba entero— en CADA frame. Costaba más que dibujar.
+      const w = Math.max(1, Math.round(rect.width || 600));
+      const h = Math.max(1, Math.round(rect.height || 80));
 
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
-      }
-
-      const total = waveData.length;
-      if (!total) {
-        frameId = requestAnimationFrame(drawFrame);
-        return;
       }
 
       // Datos del audio (para follow y cursor)
@@ -128,99 +242,64 @@ function WaveformCanvas({
         rightFrac = (start + visible) / total;
       }
 
-      // Fondo
-      ctx.fillStyle = "#171717";
-      ctx.fillRect(0, 0, w, h);
+      if (windowRef) {
+        windowRef.current.from = leftFrac;
+        windowRef.current.to = rightFrac;
+      }
 
-      // Waveform visible: un path por color (o uno solo si no hay bandas),
-      // nunca un fillRect por píxel.
+      // === Onda ===
       //
-      // Cuando cada píxel abarca varias muestras (zoom bajo) se recorre el
-      // tramo entero: la altura es el máximo y el color, la media de las
-      // bandas. Muestreando solo una de cada N, el color se enganchaba al
-      // patrón del bombo y la pista entera salía naranja.
+      // No se redibuja en cada frame. Se pinta una TIRA de tres anchos de
+      // pantalla en un lienzo aparte y cada frame es un `drawImage` del trozo
+      // que toca. Siguiendo la reproducción, la ventana tarda segundos en
+      // recorrer una pantalla entera, así que la tira se rehace una vez cada
+      // varios segundos en vez de treinta veces por segundo.
+      //
+      // Antes eran hasta 36 rellenos de Path2D por frame y por deck: con los
+      // dos decks sonando se comía media CPU.
       const samplesPerPixel = visible / w;
       const colored = bandIndex && bandIndex.length === total;
-      const paths = bandPathsRef.current;
-      if (colored) paths.fill(null);
-      const flatWave = colored ? null : new Path2D();
-
-      const addBar = (x, v, ci) => {
-        if (!colored) {
-          flatWave.rect(x, (1 - v) * h * 0.5, 1, v * h);
-          return;
+      const strip = stripRef.current;
+      const stripW = w * 3;
+      // Clave de lo que hace que la tira deje de valer: datos, colores,
+      // tamaño y escala. El desplazamiento no entra: para eso está la tira.
+      const stripKey = `${total}|${colored}|${palette[0]}|${palette[35]}|${w}|${h}|${samplesPerPixel}|${dur}|${beats?.length || 0}|${beats?.[0] || 0}`;
+      const stripEnd = strip.start + stripW * samplesPerPixel;
+      if (
+        strip.key !== stripKey ||
+        start < strip.start ||
+        start + visible > stripEnd
+      ) {
+        if (!strip.canvas) strip.canvas = document.createElement("canvas");
+        if (strip.canvas.width !== stripW || strip.canvas.height !== h) {
+          strip.canvas.width = stripW;
+          strip.canvas.height = h;
         }
-        let path = paths[ci];
-        if (!path) path = paths[ci] = new Path2D();
-        path.rect(x, (1 - v) * h * 0.5, 1, v * h);
-      };
-
-      if (samplesPerPixel <= 1) {
-        for (let x = 0; x < w; x++) {
-          const idx = Math.floor(start + x * samplesPerPixel);
-          addBar(x, waveData[idx] || 0, colored ? bandIndex[idx] || 0 : 0);
-        }
-      } else {
-        for (let x = 0; x < w; x++) {
-          const from = Math.floor(start + x * samplesPerPixel);
-          const to = Math.min(total, Math.floor(start + (x + 1) * samplesPerPixel));
-          let peakV = 0;
-          let sumLow = 0;
-          let sumHigh = 0;
-          let n = 0;
-          for (let i = from; i < to; i++) {
-            const a = waveData[i];
-            if (a > peakV) peakV = a;
-            if (colored) {
-              const ci = bandIndex[i];
-              sumLow += (ci / PALETTE_LEVELS) | 0;
-              sumHigh += ci % PALETTE_LEVELS;
-            }
-            n++;
-          }
-          if (!n) continue;
-          const ci = colored
-            ? Math.round(sumLow / n) * PALETTE_LEVELS + Math.round(sumHigh / n)
-            : 0;
-          addBar(x, peakV, ci);
-        }
+        // La ventana queda centrada en la tira: sirve igual yendo hacia
+        // delante que hacia atrás (un seek, un loop)
+        strip.start = start - w * samplesPerPixel;
+        strip.key = stripKey;
+        drawWave(
+          strip.canvas.getContext("2d"),
+          stripW,
+          h,
+          strip.start,
+          samplesPerPixel,
+          colored,
+          dur
+        );
       }
-
-      if (colored) {
-        for (let i = 0; i < PALETTE_SIZE; i++) {
-          const path = paths[i];
-          if (!path) continue;
-          ctx.fillStyle = palette[i];
-          ctx.fill(path);
-        }
-      } else {
-        // Sin datos de bandas: color de medios de la paleta elegida
-        ctx.fillStyle = palette[0];
-        ctx.fill(flatWave);
-      }
-
-      // Beats. A zoom bajo caben más de mil beats en el ancho del canvas y la
-      // rejilla acaba tapando la onda entera de rojo, así que por debajo de
-      // 4 px por beat no se dibuja: a esa escala no sirve para nada.
-      const beatPx =
-        beats && beats.length > 1 && dur > 0
-          ? ((beats[1] - beats[0]) / (dur * (rightFrac - leftFrac))) * w
-          : Infinity;
-      if (beats && beats.length && dur > 0 && beatPx >= 4) {
-        ctx.strokeStyle = "rgba(239,68,68,0.6)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        for (const t of beats) {
-          const frac = t / dur; // 0..1 global
-          if (frac >= leftFrac && frac <= rightFrac) {
-            const localFrac = (frac - leftFrac) / (rightFrac - leftFrac);
-            const x = localFrac * w;
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, h);
-          }
-        }
-        ctx.stroke();
-      }
+      ctx.drawImage(
+        strip.canvas,
+        (start - strip.start) / samplesPerPixel,
+        0,
+        w,
+        h,
+        0,
+        0,
+        w,
+        h
+      );
 
       // Región de loop. Verde el loop normal; ámbar mientras hay un loop roll
       // puesto, para distinguir de un vistazo lo momentáneo de lo fijo.
@@ -317,6 +396,40 @@ function WaveformCanvas({
         }
       }
 
+      // Aviso de fin de pista: el borde de la onda late en rojo para que se
+      // vea por el rabillo del ojo. Va aquí dentro, en el bucle que ya se
+      // refresca a 30 fps, y no toca ningún estado de React.
+      //
+      // Solo con la pista SONANDO: en pausa o sin pista, nada. El latido se
+      // acelera conforme se acaba, y con "movimiento reducido" del sistema se
+      // queda quieto.
+      if (endWarnAt > 0 && dur > 0 && audioEl && !audioEl.paused) {
+        const remain = dur - cur;
+        if (remain > 0 && remain <= endWarnAt) {
+          const k = 1 - remain / endWarnAt; // 0 al empezar el aviso, 1 al final
+          // Un latido por segundo, seno puro: sube y baja con un fundido, sin
+          // parpadeos rápidos. Lo que crece conforme se acaba la pista NO es
+          // el ritmo (a más frecuencia parecía un fluorescente estropeado),
+          // sino el brillo: el mismo latido, cada vez más encendido.
+          let pulse; // 0..1
+          if (reducedMotionRef.current) {
+            pulse = 0.7;
+          } else {
+            pulse = 0.5 + 0.5 * Math.sin((now / 1000) * Math.PI * 2 - Math.PI / 2);
+          }
+          const alpha = 0.22 + 0.18 * k + (0.5 + 0.1 * k) * pulse;
+          // Rojo claro (red-400): sobre el fondo oscuro de la onda se ve
+          // mucho mejor que el rojo de la rejilla de beats, y no se confunde
+          // con ella. Halo ancho por dentro + borde marcado.
+          ctx.strokeStyle = `rgba(248,113,113,${(alpha * 0.2).toFixed(3)})`;
+          ctx.lineWidth = 12;
+          ctx.strokeRect(6, 6, w - 12, h - 12);
+          ctx.strokeStyle = `rgba(248,113,113,${alpha.toFixed(3)})`;
+          ctx.lineWidth = 4;
+          ctx.strokeRect(2, 2, w - 4, h - 4);
+        }
+      }
+
       frameId = requestAnimationFrame(drawFrame);
     };
 
@@ -333,6 +446,8 @@ function WaveformCanvas({
     loopOut,
     loopOn,
     loopRolling,
+    endWarnAt,
+    windowRef,
     zoom,
     scroll,
     follow,
@@ -461,7 +576,7 @@ function WaveformCanvas({
   return (
     <canvas
       ref={canvasRef}
-      className="w-full h-20 bg-neutral-800 rounded-lg cursor-pointer select-none"
+      className="w-full h-28 bg-neutral-800 rounded-md cursor-pointer select-none"
       style={{ touchAction: "pan-y" }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

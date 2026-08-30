@@ -39,7 +39,9 @@ const pintar = (props = {}) =>
   )
 
 const titulosVisibles = () =>
-  screen.getAllByRole('listitem').map((li) => li.querySelector('span').textContent)
+  screen
+    .getAllByRole('listitem')
+    .map((li) => li.querySelector('[data-testid="track-title"]').textContent)
 
 describe('búsqueda', () => {
   it('filtra por título, por archivo y por artista', async () => {
@@ -211,5 +213,29 @@ describe('estado de cada pista', () => {
     expect(within(filas[0]).getByTitle(t('keySameTitle'))).toHaveTextContent('Am / 8A')
     expect(within(filas[1]).getByTitle(t('keyCompatibleTitle'))).toHaveTextContent('C / 8B')
     expect(within(filas[2]).getByTitle(t('keyClashTitle'))).toHaveTextContent('D / 10B')
+  })
+})
+
+describe('cabecera y formato del archivo', () => {
+  it('la cabecera nombra las columnas', () => {
+    pintar({ showKey: true })
+    const cabecera = screen.getByTestId('track-header')
+    const textos = [...cabecera.children].map((c) => c.textContent).filter(Boolean)
+    expect(textos).toEqual([
+      t('csvDuration'),
+      t('bpm'),
+      t('colDeck'),
+      t('csvName'),
+      t('sortKey'),
+      t('csvSize'),
+    ])
+  })
+
+  it('sin carátula, el hueco dice de qué formato es el archivo', () => {
+    pintar({ showArtwork: true })
+    // Las pistas de prueba son .mp3 y ninguna trae carátula
+    const marcas = screen.getAllByTitle(t('noArtworkFormatTitle', { format: 'MP3' }))
+    expect(marcas.length).toBeGreaterThan(0)
+    expect(marcas[0]).toHaveTextContent('MP3')
   })
 })

@@ -8,7 +8,7 @@ export default {
   masterSync: "MASTER SYNC",
   masterSyncTitle:
     "Master sync: decks with SYNC follow this BPM instead of the other deck",
-  masterBpmTitle: "Master sync BPM",
+  masterBpmTitle: "Master sync BPM. Press and drag up or down, or use the wheel, to set it without typing (hold Shift for finer steps)",
   bpm: "BPM",
   language: "Language",
 
@@ -40,8 +40,6 @@ export default {
   updateChecking: "Checking for updates…",
   updateUpToDate: "You are on the latest version",
   updateError: "Could not check for updates",
-  follow: "🔁 Follow",
-  followTitle: "Follow playback again",
   play: "▶︎ Play",
   pause: "❚❚ Pause",
   stop: "■ Stop",
@@ -177,7 +175,6 @@ export default {
   keyCompatibleTitle: "Harmonically compatible with the playing track",
   keyClashTitle: "Does not match the playing track's key",
   keyLegend: "Playing in {key}: harmonically compatible tracks are shown in purple.",
-  noArtworkTitle: "No artwork",
   showArtwork: "Artwork",
   showArtworkTitle: "Show or hide cover art thumbnails",
   showArtworkNote: "Hiding them saves screen space; the artwork is still stored.",
@@ -245,4 +242,87 @@ export default {
   logClear: "Clear",
   logFile: "On the desktop app it is also written to: {path}",
   versionTitle: "Mini DJ version",
+
+  // Estructura de la pista y aviso de fin
+  structureLabel: "Structure",
+  phraseBackCoarseTitle: "Shift the phrase {n} kicks back",
+  phraseBackFineTitle: "Shift the phrase 1 kick back",
+  phraseFwdFineTitle: "Shift the phrase 1 kick forward",
+  phraseFwdCoarseTitle: "Shift the phrase {n} kicks forward",
+  phraseSizeTitle: "Phrase length in kicks. Same setting as in ⚙ Config",
+  structureRedetectTitle: "Detect the structure again on the current beat grid, keeping the phrase shift you set by hand",
+  phraseResetTitle: "Back to the phrase shift the analysis found",
+  phraseOffsetTitle: "Current phrase shift, in kicks. Amber when you set it by hand",
+  structureTipInKick: "You are in the part with the beat.",
+  structureTipInBreak: "You are in a breakdown.",
+  structureTipDrop: "The breakdown starts in {n} kicks.",
+  structureTipDropBars: "The breakdown starts in {n} kicks ({bars} bars).",
+  structureTipRise: "The beat comes back in {n} kicks.",
+  structureTipRiseBars: "The beat comes back in {n} kicks ({bars} bars).",
+  structureTipRiseAfter: "The beat comes back {n} kicks later.",
+  structureTipDropAfter: "The breakdown starts {n} kicks later.",
+  structureTipNoChanges: "No more changes until the end of the track.",
+  structureTipToEnd: "The track ends in {n} kicks.",
+  structureTipPhrase: "You are on kick {pos} of a {size}-kick phrase.",
+  structureHeading: "Structure indicator",
+  showStructure: "Show the indicator over the waveform",
+  structureNote: "Counts the kicks left until the beat drops out (▼) and until it comes back (▲), plus where you are inside the phrase. Analysed once, when the track loads.",
+  phraseSizeLabel: "Phrase length",
+  structureUnitLabel: "Count in",
+  unitKicks: "Kicks",
+  unitBars: "Bars",
+  warnAmberLabel: "Amber warning (kicks)",
+  warnRedLabel: "Red warning (kicks)",
+  endWarnHeading: "End of track warning",
+  endWarnOn: "Warn when the track is about to end",
+  endWarnNote: "The waveform border blinks red, more insistently as the end approaches. Only while the track is playing, and steady if you have the system's reduced motion setting on.",
+  endWarnModeLabel: "Trigger by",
+  endWarnModeSeconds: "Seconds left",
+  endWarnModePercent: "Percent left",
+  endWarnValueSeconds: "Seconds",
+  endWarnValuePercent: "% of the track",
+
+  // Pitch (rango del fader y fuerza del bend)
+  pitchHeading: "Pitch",
+  bendRangeLabel: "Pitch bend strength",
+  pitchNote: "Both decks use these. The range is the starting point: if SYNC needs more travel it widens on its own without changing this. The bend strength is how much the deck's − and + buttons pull.",
+  masterBpmDownTitle: "Lower the master BPM by 1",
+  masterBpmUpTitle: "Raise the master BPM by 1",
+
+  // Pestañas de herramientas del deck
+  toolsPosition: "Position",
+  toolsBpm: "BPM",
+  toolsLoops: "Loops & rolls",
+
+  // Cabecera y formato de archivo de la lista
+  colDeck: "Deck",
+  noArtworkFormatTitle: "No artwork · {format} file",
+
+  // Resumen de la pista
+  overviewTitle: "Track overview: click or drag to move around. Dark sections are the breakdowns; the red line marks where the beat drops out and the green one where it comes back",
+
+  // Pantalla LCD del deck
+  lcdElapsed: "Elapsed",
+  lcdRemaining: "Remaining",
+  lcdTotal: "Total",
+  lcdTrackBpm: "Track BPM",
+  lcdKey: "Key",
+  lcdTimeTitle: "Track time. Click to switch between elapsed and remaining",
+
+  // Marquesina del nombre de la pista
+  marqueeSpeedLabel: "Scrolling",
+  marqueeOff: "Still",
+  marqueeSlow: "Slow",
+  marqueeNormal: "Normal",
+  marqueeFast: "Fast",
+  marqueeNote: "When the name does not fit on the deck display, it scrolls in a loop. The browser animates it, so it costs no CPU. It stays still with the system's reduced motion setting.",
+
+  // Pantalla del deck: cifras redondeadas o de 14 segmentos
+  lcdHeading: "Deck display",
+  lcdFontLabel: "Digits",
+  lcdFontRounded: "Rounded",
+  lcdFontNote: "The title on a 5 x 7 dot matrix and the readouts (time, BPM, pitch…) wired like a real panel: seven segments where only digits go, fourteen where a sign is needed. It takes the same room as the plain letters, so switching does not shift anything.",
+  titleFontLabel: "Title",
+  lcdFontLcd: "LCD screen",
+  lcdFontDot: "Dot matrix",
 };

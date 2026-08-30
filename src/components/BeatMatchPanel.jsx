@@ -76,8 +76,11 @@ function BeatMatchPanel({ analysis, audioElsRef }) {
       }
       lastDraw = now;
       const rect = canvas.getBoundingClientRect();
-      const w = Math.max(1, rect.width || 300);
-      const h = Math.max(1, rect.height || 72);
+      // Redondeado: `canvas.width` guarda enteros, y con un ancho fraccionario
+      // la comparación de abajo no se cumple nunca y el lienzo se reasigna
+      // —se reinicia entero— en cada frame. Cuesta más que dibujarlo.
+      const w = Math.max(1, Math.round(rect.width || 300));
+      const h = Math.max(1, Math.round(rect.height || 72));
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;

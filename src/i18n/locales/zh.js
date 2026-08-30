@@ -6,7 +6,7 @@ export default {
   configTitle: "设置：音频输出与分析",
   masterSync: "主同步",
   masterSyncTitle: "主同步：开启 SYNC 的打碟机跟随此 BPM，而不是另一台",
-  masterBpmTitle: "主同步的 BPM",
+  masterBpmTitle: "Master sync 的 BPM。在上面按住并上下拖动，或滚动滚轮，就能不用键盘调整（按住 Shift 更精细）",
   bpm: "BPM",
   language: "语言",
 
@@ -34,8 +34,6 @@ export default {
   updateChecking: "正在检查更新…",
   updateUpToDate: "你已是最新版本",
   updateError: "无法检查更新",
-  follow: "🔁 跟随",
-  followTitle: "重新跟随播放",
   play: "▶︎ 播放",
   pause: "❚❚ 暂停",
   stop: "■ 停止",
@@ -163,7 +161,6 @@ export default {
   keyCompatibleTitle: "与正在播放的曲目和声兼容",
   keyClashTitle: "与正在播放曲目的调性不搭",
   keyLegend: "正在播放 {key}：紫色为和声兼容的曲目。",
-  noArtworkTitle: "无封面",
   showArtwork: "封面",
   showArtworkTitle: "显示或隐藏封面缩略图",
   showArtworkNote: "隐藏可以节省屏幕空间；封面仍会保存。",
@@ -227,4 +224,87 @@ export default {
   logClear: "清空",
   logFile: "在桌面应用中还会写入：{path}",
   versionTitle: "Mini DJ 版本",
+
+  // Estructura de la pista y aviso de fin
+  structureLabel: "结构",
+  phraseBackCoarseTitle: "乐句前移 {n} 个底鼓",
+  phraseBackFineTitle: "乐句前移 1 个底鼓",
+  phraseFwdFineTitle: "乐句后移 1 个底鼓",
+  phraseFwdCoarseTitle: "乐句后移 {n} 个底鼓",
+  phraseSizeTitle: "乐句长度（底鼓数）。与 ⚙ 设置里的是同一项",
+  structureRedetectTitle: "在当前节拍网格上重新检测结构，保留你手动设定的乐句偏移",
+  phraseResetTitle: "恢复到分析检测出的乐句偏移",
+  phraseOffsetTitle: "当前乐句偏移（底鼓数）。手动设定时显示为琥珀色",
+  structureTipInKick: "你正处在有节奏的部分。",
+  structureTipInBreak: "你正处在无鼓段。",
+  structureTipDrop: "再过 {n} 个底鼓进入无鼓段。",
+  structureTipDropBars: "再过 {n} 个底鼓（{bars} 小节）进入无鼓段。",
+  structureTipRise: "再过 {n} 个底鼓节奏回来。",
+  structureTipRiseBars: "再过 {n} 个底鼓（{bars} 小节）节奏回来。",
+  structureTipRiseAfter: "节奏在 {n} 个底鼓之后回来。",
+  structureTipDropAfter: "无鼓段在 {n} 个底鼓之后开始。",
+  structureTipNoChanges: "到曲子结束都不会再有变化。",
+  structureTipToEnd: "这首曲子还有 {n} 个底鼓结束。",
+  structureTipPhrase: "你在一个 {size} 底鼓乐句的第 {pos} 个底鼓上。",
+  structureHeading: "结构指示器",
+  showStructure: "在波形上显示指示器",
+  structureNote: "统计还差几个底鼓节奏会消失（▼）以及会回来（▲），并显示你在乐句中的位置。只在载入曲目时分析一次。",
+  phraseSizeLabel: "乐句长度",
+  structureUnitLabel: "计数单位",
+  unitKicks: "底鼓",
+  unitBars: "小节",
+  warnAmberLabel: "琥珀色提醒（底鼓）",
+  warnRedLabel: "红色提醒（底鼓）",
+  endWarnHeading: "曲目结束提醒",
+  endWarnOn: "曲目快结束时提醒",
+  endWarnNote: "波形边框闪红，越接近结尾闪得越急。只在播放时出现；若系统开启了减少动态效果，则保持常亮。",
+  endWarnModeLabel: "触发方式",
+  endWarnModeSeconds: "剩余秒数",
+  endWarnModePercent: "剩余百分比",
+  endWarnValueSeconds: "秒",
+  endWarnValuePercent: "曲目百分比",
+
+  // Pitch (rango del fader y fuerza del bend)
+  pitchHeading: "变速（Pitch）",
+  bendRangeLabel: "Pitch bend 力度",
+  pitchNote: "两个 Deck 共用。范围只是起点：SYNC 需要更大行程时会自行放宽，不会改动这里。Bend 力度就是 Deck 上 − 和 + 按钮拉动的幅度。",
+  masterBpmDownTitle: "主控 BPM 减 1",
+  masterBpmUpTitle: "主控 BPM 加 1",
+
+  // Pestañas de herramientas del deck
+  toolsPosition: "定位",
+  toolsBpm: "BPM",
+  toolsLoops: "循环与 Roll",
+
+  // Cabecera y formato de archivo de la lista
+  colDeck: "Deck",
+  noArtworkFormatTitle: "无封面 · {format} 文件",
+
+  // Resumen de la pista
+  overviewTitle: "整轨概览：点击或拖动即可跳转。暗色段是无鼓段；红线标出节奏消失的位置，绿线标出节奏回来的位置",
+
+  // Pantalla LCD del deck
+  lcdElapsed: "已播放",
+  lcdRemaining: "剩余",
+  lcdTotal: "总长",
+  lcdTrackBpm: "曲目 BPM",
+  lcdKey: "调性",
+  lcdTimeTitle: "曲目时间。点击可在已播放和剩余之间切换",
+
+  // Marquesina del nombre de la pista
+  marqueeSpeedLabel: "滚动",
+  marqueeOff: "不滚动",
+  marqueeSlow: "慢",
+  marqueeNormal: "正常",
+  marqueeFast: "快",
+  marqueeNote: "名称在 Deck 屏幕上放不下时会循环滚动。动画由浏览器负责，不占 CPU。系统开启减少动态效果时保持静止。",
+
+  // Pantalla del deck: cifras redondeadas o de 14 segmentos
+  lcdHeading: "Deck 屏幕",
+  lcdFontLabel: "数字",
+  lcdFontRounded: "圆润字体",
+  lcdFontNote: "标题用 5 x 7 点阵，数字（时间、BPM、变速…）按真实面板的固定排布显示：只放数字的位用七段，需要符号的位用十四段。与普通字体占位相同，切换不会错位。",
+  titleFontLabel: "标题",
+  lcdFontLcd: "LCD 屏幕",
+  lcdFontDot: "点阵",
 };

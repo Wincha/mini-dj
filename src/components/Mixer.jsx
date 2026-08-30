@@ -3,6 +3,7 @@ import Fader from "./Fader";
 import VUBar from "./VUBar";
 import Knob from "./Knob";
 import { useI18n } from "../i18n/context";
+import { GLOSS, PRESS, SKIN } from "./PadButton";
 
 const KILL_DB = -40; // atenuación de banda en modo kill
 
@@ -57,10 +58,10 @@ function EqColumn({
       />
       <button
         onClick={() => toggleAutoGain(side)}
-        className={`px-2 py-1 rounded text-xs border w-16 text-center ${
+        className={`px-2 py-1 rounded text-xs border w-16 text-center ${GLOSS} ${PRESS} ${
           autoGainEnabled
-            ? "bg-emerald-500 text-black border-emerald-400"
-            : "bg-neutral-800 text-neutral-200 border-neutral-700"
+            ? "bg-gradient-to-b from-emerald-400 to-emerald-600 text-black border-emerald-400"
+            : `text-neutral-200 ${SKIN}`
         }`}
       >
         {t("auto")}

@@ -1,5 +1,7 @@
 import { memo, useRef, useState } from "react";
 import Fader from "./Fader";
+import PadButton, { GLOSS, PRESS, SKIN } from "./PadButton";
+import NumberField from "./NumberField";
 import VUBar from "./VUBar";
 import BeatMatchPanel from "./BeatMatchPanel";
 import LanguageSelector from "./LanguageSelector";
@@ -88,10 +90,10 @@ function CentralMeters({
           {recSupported && (
             <button
               onClick={toggleRecording}
-              className={`px-3 py-1.5 rounded-xl text-sm font-semibold border grid place-items-center tabular-nums ${
+              className={`px-3 py-1.5 rounded-xl text-sm font-semibold border grid place-items-center tabular-nums ${GLOSS} ${PRESS} ${
                 recording
-                  ? "bg-red-500 text-white border-red-400 animate-pulse"
-                  : "bg-neutral-800 text-neutral-200 border-neutral-700"
+                  ? "bg-gradient-to-b from-red-400 to-red-600 text-white border-red-400 animate-pulse"
+                  : `text-neutral-200 ${SKIN}`
               }`}
               title={t("recTitle")}
             >
@@ -132,7 +134,7 @@ function CentralMeters({
           <span className="text-xs text-neutral-400">{t("master")}</span>
           <button
             onClick={onOpenConfig}
-            className="px-2 py-0.5 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-300 hover:bg-neutral-700"
+            className={`px-2 py-0.5 rounded-lg border text-xs text-neutral-300 ${SKIN} ${GLOSS} ${PRESS}`}
             title={t("configTitle")}
           >
             ⚙
@@ -157,48 +159,50 @@ function CentralMeters({
           mode={vuMode}
           showScale
         />
-        {/* Master Sync */}
+        {/* Master Sync. Mismos botones que las cajas del deck: es de encender
+            y apagar, así que lleva testigo con luz. */}
         <div className="flex items-center gap-2">
-          <button
+          <PadButton
+            size="text"
+            led
+            active={masterSyncOn}
             onClick={onToggleMasterSync}
-            className={`px-2 py-1 rounded-lg text-xs font-semibold border text-center whitespace-nowrap ${
-              masterSyncOn
-                ? "bg-emerald-500 text-black border-emerald-400"
-                : "bg-neutral-800 text-neutral-300 border-neutral-700"
-            }`}
+            className="whitespace-nowrap"
             title={t("masterSyncTitle")}
           >
             {t("masterSync")}
-          </button>
+          </PadButton>
           <div
             className={`flex items-center gap-1 ${
               masterSyncOn ? "" : "opacity-40 pointer-events-none"
             }`}
           >
-            <button
+            <PadButton
+              size="sm"
               onClick={() => setMasterBpm(Math.max(40, masterBpm - 1))}
-              className="w-6 h-6 rounded bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs"
+              title={t("masterBpmDownTitle")}
             >
               −
-            </button>
-            <input
-              type="number"
+            </PadButton>
+            {/* El número se ajusta arrastrando o con la rueda: teclearlo a
+                mano en mitad de una mezcla es un incordio */}
+            <NumberField
+              value={masterBpm}
               min={40}
               max={220}
-              value={masterBpm}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                if (Number.isFinite(v)) setMasterBpm(Math.min(220, Math.max(40, v)));
-              }}
-              className="w-14 bg-neutral-800 border border-neutral-700 rounded px-1 py-0.5 text-center text-xs text-neutral-200"
+              step={1}
+              onChange={setMasterBpm}
+              className="w-14 h-7 text-xs"
               title={t("masterBpmTitle")}
+              ariaLabel={t("masterBpmTitle")}
             />
-            <button
+            <PadButton
+              size="sm"
               onClick={() => setMasterBpm(Math.min(220, masterBpm + 1))}
-              className="w-6 h-6 rounded bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs"
+              title={t("masterBpmUpTitle")}
             >
               +
-            </button>
+            </PadButton>
             <span className="text-[10px] text-neutral-500">{t("bpm")}</span>
           </div>
         </div>

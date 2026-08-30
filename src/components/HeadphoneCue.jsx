@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import Fader from "./Fader";
 import { useI18n } from "../i18n/context";
+import { GLOSS, PRESS, SKIN } from "./PadButton";
 import { ERRORS, logError } from "../lib/log";
 
 // PFL / pre-escucha: envía el deck (pre-fader, post-EQ) a la salida elegida
@@ -58,10 +59,10 @@ function HeadphoneCue({ engine, cueDeviceId }) {
           <button
             key={side}
             onClick={() => togglePfl(side)}
-            className={`px-2 py-1 rounded-lg text-xs font-semibold border whitespace-nowrap ${
+            className={`px-2 py-1 rounded-lg text-xs font-semibold border whitespace-nowrap ${GLOSS} ${PRESS} ${
               pfl[side]
-                ? "bg-amber-400 text-black border-amber-300"
-                : "bg-neutral-800 text-neutral-300 border-neutral-700"
+                ? "bg-gradient-to-b from-amber-300 to-amber-500 text-black border-amber-300"
+                : `text-neutral-300 ${SKIN}`
             }`}
             title={t("pflTitle", { side })}
           >

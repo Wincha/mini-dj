@@ -170,3 +170,70 @@ describe('registro de errores', () => {
     clearLog()
   })
 })
+
+describe('estructura y fin de pista', () => {
+  const ir = async (user, pest) => user.click(pestaña(t(pest)))
+
+  it('el tamaño de frase se guarda como número, no como texto', async () => {
+    const user = userEvent.setup()
+    const { onConfigChange } = abrir()
+    await ir(user, 'tabDisplay')
+
+    await user.selectOptions(screen.getByLabelText(t('phraseSizeLabel')), '32')
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ phraseSize: 32 }))
+  })
+
+  it('la unidad de la cuenta y el indicador se pueden cambiar', async () => {
+    const user = userEvent.setup()
+    const { onConfigChange } = abrir()
+    await ir(user, 'tabDisplay')
+
+    await user.selectOptions(screen.getByLabelText(t('structureUnitLabel')), 'bars')
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ structureUnit: 'bars' }))
+
+    await user.click(screen.getByLabelText(t('showStructure')))
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ showStructure: false }))
+  })
+
+  it('el aviso de fin de pista cambia de modo y enseña el valor que toca', async () => {
+    const user = userEvent.setup()
+    const { onConfigChange, rerender } = abrir()
+    await ir(user, 'tabSafety')
+
+    expect(screen.getByLabelText(t('endWarnValueSeconds'))).toHaveValue('30')
+    expect(screen.queryByLabelText(t('endWarnValuePercent'))).toBeNull()
+
+    await user.selectOptions(screen.getByLabelText(t('endWarnModeLabel')), 'percent')
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ endWarnMode: 'percent' }))
+
+    rerender(
+      <ConfigDialog
+        open
+        onClose={() => {}}
+        config={{ endWarnMode: 'percent' }}
+        onConfigChange={onConfigChange}
+      />
+    )
+    expect(screen.getByLabelText(t('endWarnValuePercent'))).toHaveValue('10')
+    expect(screen.queryByLabelText(t('endWarnValueSeconds'))).toBeNull()
+  })
+})
+
+describe('pitch', () => {
+  it('el rango del fader y la fuerza del bend se guardan como número', async () => {
+    const user = userEvent.setup()
+    const { onConfigChange } = abrir()
+
+    await user.selectOptions(screen.getByLabelText(t('rangeTitle')), '16')
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ pitchRange: 16 }))
+
+    await user.selectOptions(screen.getByLabelText(t('bendRangeLabel')), '4')
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ bendRange: 4 }))
+  })
+
+  it('un valor raro guardado cae al de siempre', () => {
+    abrir({ config: { pitchRange: 99, bendRange: 'mucho' } })
+    expect(screen.getByLabelText(t('rangeTitle'))).toHaveValue('8')
+    expect(screen.getByLabelText(t('bendRangeLabel'))).toHaveValue('4')
+  })
+})

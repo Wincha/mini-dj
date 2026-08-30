@@ -52,6 +52,29 @@ describe('biblioteca en IndexedDB', () => {
     })
   })
 
+  it('guarda la estructura de la pista y la devuelve tal cual', async () => {
+    const structure = {
+      sections: [
+        { start: 0, end: 30, kick: true, startBeat: 0, endBeat: 64 },
+        { start: 30, end: 60, kick: false, startBeat: 64, endBeat: 128 },
+      ],
+      phraseSize: 16,
+      phraseOffset: 4,
+      detectedOffset: 0,
+      confident: true,
+      manual: true,
+    }
+    await storeTrack(pista({ structure }))
+    const [row] = await loadStoredTracks()
+    expect(row.structure).toEqual(structure)
+  })
+
+  it('una estructura rota no llega a guardarse', async () => {
+    await storeTrack(pista({ structure: { sections: 'nada de esto vale' } }))
+    const [row] = await loadStoredTracks()
+    expect(row.structure).toBeNull()
+  })
+
   it('no persiste el fallo de análisis: se reintenta en cada sesión', async () => {
     await storeTrack(pista({ analyzeFailed: true }))
     const [row] = await loadStoredTracks()
@@ -205,6 +228,32 @@ describe('rejilla ajustada a mano frente al análisis de fondo', () => {
     const manual = mergeTrackAnalysis({ ...conCues, gridManual: true }, analisis)
     expect(manual.hotCues).toEqual(conCues.hotCues)
     expect(manual.savedLoops).toEqual(conCues.savedLoops)
+  })
+
+  it('la estructura ajustada a mano NUNCA la toca el análisis', async () => {
+    const structure = {
+      sections: [
+        { start: 0, end: 30, kick: true, startBeat: 0, endBeat: 64 },
+        { start: 30, end: 60, kick: false, startBeat: 64, endBeat: 128 },
+      ],
+      phraseSize: 16,
+      phraseOffset: 9,
+      detectedOffset: 0,
+      confident: true,
+      manual: true,
+    }
+    // Ni en la rama normal ni en la de rejilla manual
+    expect(mergeTrackAnalysis({ id: 'x', structure }, analisis).structure).toEqual(structure)
+    expect(
+      mergeTrackAnalysis({ id: 'x', structure, gridManual: true }, analisis).structure
+    ).toEqual(structure)
+
+    // Y aguanta la vuelta completa por IndexedDB
+    await storeTrack(pista({ structure }))
+    const [recargada] = await loadStoredTracks()
+    await storeTrack(mergeTrackAnalysis(recargada, analisis))
+    const [final] = await loadStoredTracks()
+    expect(final.structure).toEqual(structure)
   })
 
   it('el ajuste manual sobrevive a guardar, recargar y reanalizar', async () => {

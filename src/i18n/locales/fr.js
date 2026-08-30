@@ -7,7 +7,7 @@ export default {
   masterSync: "MASTER SYNC",
   masterSyncTitle:
     "Master sync : les decks en SYNC suivent ce BPM au lieu de l'autre deck",
-  masterBpmTitle: "BPM du master sync",
+  masterBpmTitle: "BPM du master sync. Clique et fais glisser vers le haut ou le bas, ou utilise la molette, pour le régler sans taper (avec Maj, plus fin)",
   bpm: "BPM",
   language: "Langue",
 
@@ -37,8 +37,6 @@ export default {
   updateChecking: "Recherche de mises à jour…",
   updateUpToDate: "Vous avez la dernière version",
   updateError: "Impossible de vérifier les mises à jour",
-  follow: "🔁 Suivre",
-  followTitle: "Suivre à nouveau la lecture",
   play: "▶︎ Play",
   pause: "❚❚ Pause",
   stop: "■ Stop",
@@ -172,7 +170,6 @@ export default {
   keyCompatibleTitle: "Compatible avec le morceau en cours",
   keyClashTitle: "Ne correspond pas à la tonalité du morceau en cours",
   keyLegend: "En cours en {key} : en violet, les morceaux harmoniquement compatibles.",
-  noArtworkTitle: "Sans pochette",
   showArtwork: "Pochettes",
   showArtworkTitle: "Afficher ou masquer les vignettes de pochette",
   showArtworkNote: "Les masquer libère de la place à l'écran ; les pochettes restent enregistrées.",
@@ -238,4 +235,87 @@ export default {
   logClear: "Vider",
   logFile: "Dans l'app de bureau, il est aussi écrit dans : {path}",
   versionTitle: "Version de Mini DJ",
+
+  // Estructura de la pista y aviso de fin
+  structureLabel: "Structure",
+  phraseBackCoarseTitle: "Recule la phrase de {n} kicks",
+  phraseBackFineTitle: "Recule la phrase de 1 kick",
+  phraseFwdFineTitle: "Avance la phrase de 1 kick",
+  phraseFwdCoarseTitle: "Avance la phrase de {n} kicks",
+  phraseSizeTitle: "Longueur de la phrase en kicks. C'est le même réglage que dans ⚙ Configuration",
+  structureRedetectTitle: "Redétecte la structure sur la grille actuelle, en gardant le décalage de phrase réglé à la main",
+  phraseResetTitle: "Revient au décalage de phrase trouvé par l'analyse",
+  phraseOffsetTitle: "Décalage de phrase actuel, en kicks. En ambre quand tu l'as réglé à la main",
+  structureTipInKick: "Tu es dans la partie rythmée.",
+  structureTipInBreak: "Tu es dans un break.",
+  structureTipDrop: "Le break arrive dans {n} kicks.",
+  structureTipDropBars: "Le break arrive dans {n} kicks ({bars} mesures).",
+  structureTipRise: "Le rythme revient dans {n} kicks.",
+  structureTipRiseBars: "Le rythme revient dans {n} kicks ({bars} mesures).",
+  structureTipRiseAfter: "Le rythme revient {n} kicks plus tard.",
+  structureTipDropAfter: "Le break arrive {n} kicks plus tard.",
+  structureTipNoChanges: "Plus aucun changement jusqu'à la fin du morceau.",
+  structureTipToEnd: "Le morceau se termine dans {n} kicks.",
+  structureTipPhrase: "Tu es sur le kick {pos} d'une phrase de {size}.",
+  structureHeading: "Indicateur de structure",
+  showStructure: "Afficher l'indicateur sur la forme d'onde",
+  structureNote: "Compte les kicks restants avant que le rythme parte (▼) et avant qu'il revienne (▲), et où tu en es dans la phrase. Analysé une seule fois, au chargement du morceau.",
+  phraseSizeLabel: "Longueur de phrase",
+  structureUnitLabel: "Compter en",
+  unitKicks: "Kicks",
+  unitBars: "Mesures",
+  warnAmberLabel: "Alerte ambre (kicks)",
+  warnRedLabel: "Alerte rouge (kicks)",
+  endWarnHeading: "Alerte de fin de morceau",
+  endWarnOn: "Prévenir quand le morceau se termine",
+  endWarnNote: "Le bord de la forme d'onde clignote en rouge, de plus en plus insistant. Uniquement quand le morceau joue, et fixe si le mouvement réduit du système est activé.",
+  endWarnModeLabel: "Déclencher par",
+  endWarnModeSeconds: "Secondes restantes",
+  endWarnModePercent: "Pourcentage restant",
+  endWarnValueSeconds: "Secondes",
+  endWarnValuePercent: "% du morceau",
+
+  // Pitch (rango del fader y fuerza del bend)
+  pitchHeading: "Pitch",
+  bendRangeLabel: "Force du pitch bend",
+  pitchNote: "Valables pour les deux platines. La plage est le point de départ : si le SYNC a besoin de plus de course, il l'élargit tout seul sans toucher à ce réglage. La force du bend, c'est ce que tirent les boutons − et + de la platine.",
+  masterBpmDownTitle: "Baisse le BPM du master de 1",
+  masterBpmUpTitle: "Monte le BPM du master de 1",
+
+  // Pestañas de herramientas del deck
+  toolsPosition: "Position",
+  toolsBpm: "BPM",
+  toolsLoops: "Loops et rolls",
+
+  // Cabecera y formato de archivo de la lista
+  colDeck: "Platine",
+  noArtworkFormatTitle: "Sans pochette · fichier {format}",
+
+  // Resumen de la pista
+  overviewTitle: "Aperçu du morceau : clique ou fais glisser pour te déplacer. Les zones sombres sont les breaks ; la ligne rouge marque où le rythme part et la verte où il revient",
+
+  // Pantalla LCD del deck
+  lcdElapsed: "Écoulé",
+  lcdRemaining: "Restant",
+  lcdTotal: "Total",
+  lcdTrackBpm: "BPM morceau",
+  lcdKey: "Tonalité",
+  lcdTimeTitle: "Temps du morceau. Clique pour passer de l'écoulé au restant",
+
+  // Marquesina del nombre de la pista
+  marqueeSpeedLabel: "Défilement",
+  marqueeOff: "Fixe",
+  marqueeSlow: "Lent",
+  marqueeNormal: "Normal",
+  marqueeFast: "Rapide",
+  marqueeNote: "Quand le nom ne tient pas sur l'écran de la platine, il défile en boucle. C'est le navigateur qui l'anime, ça ne coûte pas de CPU. Il reste fixe si le mouvement réduit du système est activé.",
+
+  // Pantalla del deck: cifras redondeadas o de 14 segmentos
+  lcdHeading: "Écran de la platine",
+  lcdFontLabel: "Chiffres",
+  lcdFontRounded: "Arrondis",
+  lcdFontNote: "Le titre en matrice de 5 x 7 points et les chiffres (temps, BPM, pitch…) avec le montage fixe d'un vrai afficheur : sept segments là où il n'y a que des chiffres, quatorze là où il faut un signe. Même encombrement qu'avec les lettres normales : changer ne décale rien.",
+  titleFontLabel: "Titre",
+  lcdFontLcd: "Écran LCD",
+  lcdFontDot: "Matrice de points",
 };

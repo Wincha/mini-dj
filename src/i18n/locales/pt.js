@@ -7,7 +7,7 @@ export default {
   masterSync: "MASTER SYNC",
   masterSyncTitle:
     "Master sync: os decks com SYNC seguem este BPM em vez do outro deck",
-  masterBpmTitle: "BPM do master sync",
+  masterBpmTitle: "BPM do master sync. Carrega em cima e arrasta para cima ou para baixo, ou usa a roda, para o ajustar sem escrever (com Shift, mais fino)",
   bpm: "BPM",
   language: "Idioma",
 
@@ -37,8 +37,6 @@ export default {
   updateChecking: "A procurar atualizações…",
   updateUpToDate: "Já tens a versão mais recente",
   updateError: "Não foi possível verificar as atualizações",
-  follow: "🔁 Seguir",
-  followTitle: "Voltar a seguir a reprodução",
   play: "▶︎ Play",
   pause: "❚❚ Pausa",
   stop: "■ Stop",
@@ -172,7 +170,6 @@ export default {
   keyCompatibleTitle: "Compatível com a faixa em reprodução",
   keyClashTitle: "Não combina com a tonalidade da faixa em reprodução",
   keyLegend: "A tocar em {key}: a roxo, as faixas harmonicamente compatíveis.",
-  noArtworkTitle: "Sem capa",
   showArtwork: "Capas",
   showArtworkTitle: "Mostrar ou ocultar as miniaturas das capas",
   showArtworkNote: "Ocultá-las ganha espaço no ecrã; as capas continuam guardadas.",
@@ -238,4 +235,87 @@ export default {
   logClear: "Limpar",
   logFile: "Na app de secretária também é guardado em: {path}",
   versionTitle: "Versão do Mini DJ",
+
+  // Estructura de la pista y aviso de fin
+  structureLabel: "Estrutura",
+  phraseBackCoarseTitle: "Atrasa a frase {n} kicks",
+  phraseBackFineTitle: "Atrasa a frase 1 kick",
+  phraseFwdFineTitle: "Adianta a frase 1 kick",
+  phraseFwdCoarseTitle: "Adianta a frase {n} kicks",
+  phraseSizeTitle: "Tamanho da frase em kicks. É o mesmo ajuste que existe em ⚙ Configuração",
+  structureRedetectTitle: "Deteta de novo a estrutura sobre a grelha atual, respeitando o deslocamento de frase que tenhas posto à mão",
+  phraseResetTitle: "Devolve o deslocamento de frase ao que a análise encontrou",
+  phraseOffsetTitle: "Deslocamento de frase atual, em kicks. Em âmbar quando foste tu a pô-lo à mão",
+  structureTipInKick: "Estás na parte com ritmo.",
+  structureTipInBreak: "Estás num break.",
+  structureTipDrop: "O break entra dentro de {n} kicks.",
+  structureTipDropBars: "O break entra dentro de {n} kicks ({bars} compassos).",
+  structureTipRise: "O ritmo volta dentro de {n} kicks.",
+  structureTipRiseBars: "O ritmo volta dentro de {n} kicks ({bars} compassos).",
+  structureTipRiseAfter: "O ritmo volta {n} kicks depois.",
+  structureTipDropAfter: "O break entra {n} kicks depois.",
+  structureTipNoChanges: "Não há mais mudanças até ao fim da faixa.",
+  structureTipToEnd: "A faixa acaba dentro de {n} kicks.",
+  structureTipPhrase: "Vais no kick {pos} de uma frase de {size}.",
+  structureHeading: "Indicador de estrutura",
+  showStructure: "Mostrar o indicador sobre a onda",
+  structureNote: "Conta os kicks que faltam para o ritmo sair (▼) e para voltar (▲), e onde vais dentro da frase. É analisado uma só vez, ao carregar a faixa.",
+  phraseSizeLabel: "Tamanho da frase",
+  structureUnitLabel: "Contar em",
+  unitKicks: "Kicks",
+  unitBars: "Compassos",
+  warnAmberLabel: "Aviso âmbar (kicks)",
+  warnRedLabel: "Aviso vermelho (kicks)",
+  endWarnHeading: "Aviso de fim de faixa",
+  endWarnOn: "Avisar quando a faixa está a acabar",
+  endWarnNote: "A margem da onda pisca a vermelho, cada vez mais insistente. Só com a faixa a tocar, e parado se tiveres ativo o movimento reduzido do sistema.",
+  endWarnModeLabel: "Avisar por",
+  endWarnModeSeconds: "Segundos restantes",
+  endWarnModePercent: "Percentagem restante",
+  endWarnValueSeconds: "Segundos",
+  endWarnValuePercent: "% da faixa",
+
+  // Pitch (rango del fader y fuerza del bend)
+  pitchHeading: "Pitch",
+  bendRangeLabel: "Força do pitch bend",
+  pitchNote: "Valem para os dois decks. O intervalo é o de partida: se o SYNC precisar de mais curso alarga-o sozinho, sem mexer nisto. A força do bend é o que os botões − e + do deck esticam.",
+  masterBpmDownTitle: "Baixa 1 o BPM do master",
+  masterBpmUpTitle: "Sobe 1 o BPM do master",
+
+  // Pestañas de herramientas del deck
+  toolsPosition: "Posição",
+  toolsBpm: "BPM",
+  toolsLoops: "Loops e rolls",
+
+  // Cabecera y formato de archivo de la lista
+  colDeck: "Deck",
+  noArtworkFormatTitle: "Sem capa · ficheiro {format}",
+
+  // Resumen de la pista
+  overviewTitle: "Resumo da faixa: carrega ou arrasta para te moveres. Os trechos escuros são os breaks; a linha vermelha marca onde o ritmo sai e a verde onde volta",
+
+  // Pantalla LCD del deck
+  lcdElapsed: "Decorrido",
+  lcdRemaining: "Restante",
+  lcdTotal: "Total",
+  lcdTrackBpm: "BPM faixa",
+  lcdKey: "Tom",
+  lcdTimeTitle: "Tempo da faixa. Carrega para alternar entre o decorrido e o que falta",
+
+  // Marquesina del nombre de la pista
+  marqueeSpeedLabel: "Marquise",
+  marqueeOff: "Parado",
+  marqueeSlow: "Lento",
+  marqueeNormal: "Normal",
+  marqueeFast: "Rápido",
+  marqueeNote: "Quando o nome não cabe no ecrã do deck, passa em loop. A animação é do navegador, não custa CPU. Com o movimento reduzido do sistema fica parado.",
+
+  // Pantalla del deck: cifras redondeadas o de 14 segmentos
+  lcdHeading: "Ecrã do deck",
+  lcdFontLabel: "Algarismos",
+  lcdFontRounded: "Arredondados",
+  lcdFontNote: "O título em matriz de 5 x 7 pontos e os algarismos (tempo, BPM, pitch…) com a montagem fixa de um ecrã a sério: sete segmentos onde só vão números e catorze onde é preciso um sinal. Ocupa o mesmo que com as letras normais: mudar não desalinha nada.",
+  titleFontLabel: "Título",
+  lcdFontLcd: "Ecrã LCD",
+  lcdFontDot: "Matriz de pontos",
 };

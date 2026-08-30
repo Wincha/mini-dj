@@ -7,7 +7,7 @@ export default {
   masterSync: "マスターシンク",
   masterSyncTitle:
     "マスターシンク：SYNC 中のデッキは相手デッキではなくこの BPM に追従します",
-  masterBpmTitle: "マスターシンクの BPM",
+  masterBpmTitle: "マスターシンクの BPM。上で押したまま上下にドラッグするか、ホイールを回すと、入力せずに調整できます（Shift でさらに細かく）",
   bpm: "BPM",
   language: "言語",
 
@@ -37,8 +37,6 @@ export default {
   updateChecking: "アップデートを確認中…",
   updateUpToDate: "最新バージョンです",
   updateError: "アップデートを確認できませんでした",
-  follow: "🔁 追従",
-  followTitle: "再生位置の追従に戻る",
   play: "▶︎ 再生",
   pause: "❚❚ 一時停止",
   stop: "■ 停止",
@@ -172,7 +170,6 @@ export default {
   keyCompatibleTitle: "再生中のトラックとハーモニックに相性が良い",
   keyClashTitle: "再生中のトラックのキーと合いません",
   keyLegend: "再生中のキーは {key}：紫がハーモニックに相性の良いトラックです。",
-  noArtworkTitle: "ジャケットなし",
   showArtwork: "ジャケット",
   showArtworkTitle: "ジャケットのサムネイルを表示／非表示",
   showArtworkNote: "非表示にすると画面に余裕ができます。ジャケットは保存されたままです。",
@@ -238,4 +235,87 @@ export default {
   logClear: "消去",
   logFile: "デスクトップアプリでは次の場所にも保存されます: {path}",
   versionTitle: "Mini DJ のバージョン",
+
+  // Estructura de la pista y aviso de fin
+  structureLabel: "構成",
+  phraseBackCoarseTitle: "フレーズを {n} キック戻す",
+  phraseBackFineTitle: "フレーズを 1 キック戻す",
+  phraseFwdFineTitle: "フレーズを 1 キック進める",
+  phraseFwdCoarseTitle: "フレーズを {n} キック進める",
+  phraseSizeTitle: "フレーズの長さ（キック数）。⚙ 設定にあるのと同じ項目です",
+  structureRedetectTitle: "現在のビートグリッドで構成を検出し直します。手動で設定したフレーズのずれはそのまま残ります",
+  phraseResetTitle: "解析が見つけたフレーズのずれに戻す",
+  phraseOffsetTitle: "現在のフレーズのずれ（キック数）。手動で設定するとアンバー色になります",
+  structureTipInKick: "リズムが鳴っている部分です。",
+  structureTipInBreak: "ブレイクの中です。",
+  structureTipDrop: "あと {n} キックでブレイクに入ります。",
+  structureTipDropBars: "あと {n} キック（{bars} 小節）でブレイクに入ります。",
+  structureTipRise: "あと {n} キックでリズムが戻ります。",
+  structureTipRiseBars: "あと {n} キック（{bars} 小節）でリズムが戻ります。",
+  structureTipRiseAfter: "その {n} キック後にリズムが戻ります。",
+  structureTipDropAfter: "その {n} キック後にブレイクに入ります。",
+  structureTipNoChanges: "曲の終わりまで、これ以上の変化はありません。",
+  structureTipToEnd: "この曲はあと {n} キックで終わります。",
+  structureTipPhrase: "{size} キックのフレーズの {pos} キック目です。",
+  structureHeading: "構成インジケーター",
+  showStructure: "波形の上にインジケーターを表示",
+  structureNote: "リズムが抜けるまで（▼）と戻るまで（▲）のキック数、そしてフレーズ内の位置を表示します。曲を読み込むときに一度だけ解析します。",
+  phraseSizeLabel: "フレーズの長さ",
+  structureUnitLabel: "カウント単位",
+  unitKicks: "キック",
+  unitBars: "小節",
+  warnAmberLabel: "アンバー警告（キック）",
+  warnRedLabel: "レッド警告（キック）",
+  endWarnHeading: "曲の終わりの警告",
+  endWarnOn: "曲が終わりに近づいたら知らせる",
+  endWarnNote: "波形のふちが赤く点滅し、終わりに近づくほど速くなります。再生中だけで、システムの「視差効果を減らす」が有効なら点滅せずに点灯します。",
+  endWarnModeLabel: "知らせる基準",
+  endWarnModeSeconds: "残り秒数",
+  endWarnModePercent: "残りの割合",
+  endWarnValueSeconds: "秒",
+  endWarnValuePercent: "曲の %",
+
+  // Pitch (rango del fader y fuerza del bend)
+  pitchHeading: "ピッチ",
+  bendRangeLabel: "ピッチベンドの強さ",
+  pitchNote: "両方のデッキで使います。レンジは出発点です。SYNC がもっと幅を必要とすれば自分で広げるので、この設定は変わりません。ベンドの強さは、デッキの − と + のボタンが引っぱる量です。",
+  masterBpmDownTitle: "マスターの BPM を 1 下げる",
+  masterBpmUpTitle: "マスターの BPM を 1 上げる",
+
+  // Pestañas de herramientas del deck
+  toolsPosition: "位置",
+  toolsBpm: "BPM",
+  toolsLoops: "ループとロール",
+
+  // Cabecera y formato de archivo de la lista
+  colDeck: "デッキ",
+  noArtworkFormatTitle: "ジャケットなし · {format} ファイル",
+
+  // Resumen de la pista
+  overviewTitle: "曲全体の概観：クリックかドラッグで移動できます。暗い部分がブレイク、赤い線はリズムが抜ける場所、緑の線は戻る場所です",
+
+  // Pantalla LCD del deck
+  lcdElapsed: "経過",
+  lcdRemaining: "残り",
+  lcdTotal: "全体",
+  lcdTrackBpm: "曲の BPM",
+  lcdKey: "キー",
+  lcdTimeTitle: "曲の時間。クリックで経過と残りを切り替えます",
+
+  // Marquesina del nombre de la pista
+  marqueeSpeedLabel: "スクロール",
+  marqueeOff: "止める",
+  marqueeSlow: "ゆっくり",
+  marqueeNormal: "ふつう",
+  marqueeFast: "はやい",
+  marqueeNote: "曲名がデッキの画面に収まらないときは繰り返し流れます。アニメーションはブラウザが担当するので CPU は使いません。システムの視差効果を減らす設定では止まります。",
+
+  // Pantalla del deck: cifras redondeadas o de 14 segmentos
+  lcdHeading: "デッキの画面",
+  lcdFontLabel: "数字",
+  lcdFontRounded: "丸い文字",
+  lcdFontNote: "曲名は 5 x 7 のドットマトリクス、数字（時間・BPM・ピッチなど）は本物のパネルと同じ固定構成で表示します。数字だけの桁は 7 セグメント、記号が入る桁は 14 セグメントです。ふつうの文字と同じ幅なので、切り替えてもずれません。",
+  titleFontLabel: "曲名",
+  lcdFontLcd: "LCD 表示",
+  lcdFontDot: "ドットマトリクス",
 };

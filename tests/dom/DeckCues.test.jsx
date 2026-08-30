@@ -54,6 +54,10 @@ const deckEl = (file, token, props) => (
   />
 )
 
+// Las herramientas del deck van por pestañas: esto abre la que haga falta
+const pestaña = (clave) =>
+  fireEvent.click(screen.getByRole('tab', { name: t(clave) }))
+
 // Monta el deck y espera a que la pista esté cargada (hay <audio src>)
 const montar = async (props = {}) => {
   const utils = renderWithI18n(deckEl(pista(), 1, props))
@@ -188,6 +192,7 @@ describe('cues y loops que suben al padre para guardarse', () => {
   it('un loop marcado a mano también sube', async () => {
     const onCues = vi.fn()
     await montar({ onCues })
+    pestaña('toolsLoops')
 
     tiempo = 10
     fireEvent.click(screen.getByTitle(t('loopInTitle')))
@@ -228,6 +233,7 @@ describe('restaurar lo guardado al volver a cargar la pista', () => {
 
   it('los loops guardados vuelven a la lista y se pueden activar', async () => {
     await montar({ track: guardado })
+    pestaña('toolsLoops')
 
     const selector = await screen.findByTitle(t('savedLoopSelectTitle'))
     await waitFor(() => expect(selector).not.toBeDisabled())
@@ -240,10 +246,11 @@ describe('restaurar lo guardado al volver a cargar la pista', () => {
 
   it('el loop de la pista vuelve marcado pero APAGADO', async () => {
     await montar({ track: guardado })
+    pestaña('toolsLoops')
     const toggle = await screen.findByTitle(t('loopToggleTitle'))
     await waitFor(() => expect(toggle).not.toBeDisabled())
-    // Apagado: el botón no está en verde (esa clase solo aparece con el loop on)
-    expect(toggle.className).not.toContain('bg-emerald-500')
+    // Apagado: sin testigo encendido (el halo solo se pinta con el loop on)
+    expect(toggle.style.boxShadow).toBe('')
   })
 })
 
@@ -251,6 +258,7 @@ describe('longitud del loop', () => {
   it('÷2 y ×2 mantienen el punto de entrada', async () => {
     const onCues = vi.fn()
     await montar({ onCues })
+    pestaña('toolsLoops')
 
     tiempo = 10
     fireEvent.click(screen.getByTitle(t('loopInTitle')))
@@ -271,6 +279,7 @@ describe('longitud del loop', () => {
   it('mover el loop lo desplaza una longitud entera', async () => {
     const onCues = vi.fn()
     await montar({ onCues })
+    pestaña('toolsLoops')
 
     tiempo = 10
     fireEvent.click(screen.getByTitle(t('loopInTitle')))

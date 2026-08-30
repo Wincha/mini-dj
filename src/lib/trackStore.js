@@ -7,6 +7,7 @@ import {
   sanitizeLoopRegion,
   sanitizeSavedLoops,
 } from "./cuePoints";
+import { sanitizeStructure } from "../audio/structure";
 
 const DB_NAME = "mini-dj";
 const STORE = "tracks";
@@ -78,6 +79,10 @@ export async function storeTrack(track) {
       hotCues = [],
       savedLoops = [],
       activeLoop = null,
+      // Estructura (tramos con y sin ritmo + frase). Se calcula una sola vez
+      // al cargar la pista en un deck y se guarda aquí para no repetirla.
+      // `structure.manual` marca que el usuario movió la frase a mano.
+      structure = null,
     } = track;
     await withStore("readwrite", (s) =>
       s.put({
@@ -100,6 +105,7 @@ export async function storeTrack(track) {
         hotCues: sanitizeHotCues(hotCues),
         savedLoops: sanitizeSavedLoops(savedLoops),
         activeLoop: sanitizeLoopRegion(activeLoop),
+        structure: sanitizeStructure(structure),
       })
     );
   } catch (err) {
@@ -122,8 +128,9 @@ export async function removeStoredTrack(id) {
  * De una pista con `gridManual` solo se aceptan la duración y la tonalidad; el
  * BPM y el ancla se quedan como los dejó el usuario.
  *
- * Los hot cues y los loops son del usuario SIEMPRE: el análisis no los toca en
- * ningún caso (aquí viajan intactos dentro de `...track`).
+ * Los hot cues, los loops y la estructura ajustada a mano son del usuario
+ * SIEMPRE: el análisis no los toca en ningún caso (aquí viajan intactos dentro
+ * de `...track`).
  */
 export function mergeTrackAnalysis(track, { bpm, gridAnchor, duration, musicalKey } = {}) {
   if (track?.gridManual) {

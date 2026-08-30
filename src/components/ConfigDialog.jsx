@@ -14,6 +14,21 @@ import {
   resolveWaveColors,
   WAVE_PRESETS,
 } from "../lib/waveColors";
+import { PHRASE_SIZES } from "../audio/structure";
+import {
+  BEND_RANGES,
+  DEFAULT_BEND_RANGE,
+  DEFAULT_PITCH_RANGE,
+  PITCH_RANGES,
+} from "../lib/constants";
+import {
+  END_WARN_MODES,
+  LCD_FONTS,
+  STRUCTURE_UNITS,
+  TITLE_FONTS,
+  MARQUEE_SPEEDS,
+  resolveStructurePrefs,
+} from "../lib/structurePrefs";
 
 // Vista previa de la paleta: una onda de mentira (bombo a negras, cuerpo y
 // hats a contratiempo) pintada con el MISMO código que usa el deck, así que
@@ -53,6 +68,13 @@ function WavePreview({ colors }) {
 
   return <canvas ref={canvasRef} className="w-full h-10 rounded-lg" />;
 }
+
+// Cómo se llama cada modo de pintado de la pantalla del deck
+const FONT_LABELS = {
+  rounded: "lcdFontRounded",
+  lcd: "lcdFontLcd",
+  dot: "lcdFontDot",
+};
 
 // Pestañas del diálogo. El orden es el del panel de arriba.
 const TABS = [
@@ -150,6 +172,27 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
 
   // Colores efectivos: el preset elegido, o los del modo personalizado
   const waveColors = resolveWaveColors(config);
+  // Ajustes de estructura y fin de pista, ya saneados: el diálogo enseña lo
+  // mismo que aplica el deck
+  const structure = resolveStructurePrefs(config);
+
+  // Selector pequeño de un ajuste numérico (umbrales, segundos, %)
+  const numberSelect = (key, label, options, value) => (
+    <label className="flex items-center justify-between gap-2 text-xs text-neutral-400">
+      {label}
+      <select
+        value={value}
+        onChange={(e) => set(key, Number(e.target.value))}
+        className="w-24 shrink-0 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1 text-sm text-neutral-200 tabular-nums"
+      >
+        {options.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 
   const deviceSelect = (key, label, extraOption) => (
     <label className="flex flex-col gap-1 text-xs text-neutral-400">
@@ -208,6 +251,49 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
         ) : (
           <p className="text-[10px] text-neutral-500">{t("noSinkSupport")}</p>
         )}
+
+        {/* Pitch: antes vivía en cada deck; se subió aquí para dejarle sitio a
+            las cajas de herramientas. Vale para los dos decks. */}
+        <h3 className="mt-2 text-sm font-semibold text-neutral-300">
+          {t("pitchHeading")}
+        </h3>
+        <label className="flex items-center justify-between gap-2 text-xs text-neutral-400">
+          {t("rangeTitle")}
+          <select
+            value={
+              PITCH_RANGES.includes(Number(config.pitchRange))
+                ? Number(config.pitchRange)
+                : DEFAULT_PITCH_RANGE
+            }
+            onChange={(e) => set("pitchRange", Number(e.target.value))}
+            className="w-24 shrink-0 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1 text-sm text-neutral-200 tabular-nums"
+          >
+            {PITCH_RANGES.map((n) => (
+              <option key={n} value={n}>
+                ±{n} %
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center justify-between gap-2 text-xs text-neutral-400">
+          {t("bendRangeLabel")}
+          <select
+            value={
+              BEND_RANGES.includes(Number(config.bendRange))
+                ? Number(config.bendRange)
+                : DEFAULT_BEND_RANGE
+            }
+            onChange={(e) => set("bendRange", Number(e.target.value))}
+            className="w-24 shrink-0 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1 text-sm text-neutral-200 tabular-nums"
+          >
+            {BEND_RANGES.map((n) => (
+              <option key={n} value={n}>
+                ±{n} %
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="text-[10px] text-neutral-500">{t("pitchNote")}</p>
       </div>
     ),
 
@@ -351,6 +437,116 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
           <WavePreview colors={waveColors} />
           <p className="text-[10px] text-neutral-500">{t("wavePaletteNote")}</p>
         </div>
+
+        {/* Indicador de estructura de la onda */}
+        <div className="grid gap-2">
+          <h3 className="text-sm font-semibold text-neutral-300">
+            {t("structureHeading")}
+          </h3>
+          <label className="flex items-center gap-2 text-sm text-neutral-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={structure.show}
+              onChange={(e) => set("showStructure", e.target.checked)}
+              className="accent-emerald-500"
+            />
+            {t("showStructure")}
+          </label>
+          <p className="text-[10px] text-neutral-500">{t("structureNote")}</p>
+          {numberSelect(
+            "phraseSize",
+            t("phraseSizeLabel"),
+            PHRASE_SIZES,
+            structure.phraseSize
+          )}
+          <label className="flex items-center justify-between gap-2 text-xs text-neutral-400">
+            {t("structureUnitLabel")}
+            <select
+              value={structure.unit}
+              onChange={(e) => set("structureUnit", e.target.value)}
+              className="w-24 shrink-0 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1 text-sm text-neutral-200"
+            >
+              {STRUCTURE_UNITS.map((u) => (
+                <option key={u} value={u}>
+                  {t(u === "bars" ? "unitBars" : "unitKicks")}
+                </option>
+              ))}
+            </select>
+          </label>
+          {numberSelect(
+            "structureWarnAmber",
+            t("warnAmberLabel"),
+            [8, 16, 32, 64],
+            structure.warnAmber
+          )}
+          {numberSelect(
+            "structureWarnRed",
+            t("warnRedLabel"),
+            [1, 2, 4, 8, 16],
+            structure.warnRed
+          )}
+        </div>
+
+        {/* Marquesina del nombre de la pista en la pantalla del deck */}
+        <div className="grid gap-2">
+          <h3 className="text-sm font-semibold text-neutral-300">
+            {t("lcdHeading")}
+          </h3>
+          <label className="flex items-center justify-between gap-2 text-xs text-neutral-400">
+            {t("marqueeSpeedLabel")}
+            <select
+              value={structure.marqueeSpeed}
+              onChange={(e) => set("marqueeSpeed", Number(e.target.value))}
+              className="w-32 shrink-0 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1 text-sm text-neutral-200"
+            >
+              {MARQUEE_SPEEDS.map((v) => (
+                <option key={v} value={v}>
+                  {t(
+                    v === 0
+                      ? "marqueeOff"
+                      : v <= 15
+                      ? "marqueeSlow"
+                      : v <= 30
+                      ? "marqueeNormal"
+                      : "marqueeFast"
+                  )}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-[10px] text-neutral-500">{t("marqueeNote")}</p>
+          {/* Mismo orden que en la pantalla del deck: primero el título,
+              luego las cifras */}
+          <label className="flex items-center justify-between gap-2 text-xs text-neutral-400">
+            {t("titleFontLabel")}
+            <select
+              value={structure.titleFont}
+              onChange={(e) => set("titleFont", e.target.value)}
+              className="w-32 shrink-0 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1 text-sm text-neutral-200"
+            >
+              {TITLE_FONTS.map((f) => (
+                <option key={f} value={f}>
+                  {t(FONT_LABELS[f])}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center justify-between gap-2 text-xs text-neutral-400">
+            {t("lcdFontLabel")}
+            <select
+              value={structure.lcdFont}
+              onChange={(e) => set("lcdFont", e.target.value)}
+              className="w-32 shrink-0 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1 text-sm text-neutral-200"
+            >
+              {LCD_FONTS.map((f) => (
+                <option key={f} value={f}>
+                  {t(FONT_LABELS[f])}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-[10px] text-neutral-500">{t("lcdFontNote")}</p>
+        </div>
       </div>
     ),
 
@@ -421,6 +617,47 @@ export default function ConfigDialog({ open, onClose, config, onConfigChange }) 
         <p className="text-[10px] text-neutral-500">
           {t("lockLoadWhilePlayingNote")}
         </p>
+
+        <h3 className="mt-2 text-sm font-semibold text-neutral-300">
+          {t("endWarnHeading")}
+        </h3>
+        <label className="flex items-center gap-2 text-sm text-neutral-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={structure.endWarn.enabled}
+            onChange={(e) => set("endWarnOn", e.target.checked)}
+            className="accent-emerald-500"
+          />
+          {t("endWarnOn")}
+        </label>
+        <p className="text-[10px] text-neutral-500">{t("endWarnNote")}</p>
+        <label className="flex items-center justify-between gap-2 text-xs text-neutral-400">
+          {t("endWarnModeLabel")}
+          <select
+            value={structure.endWarn.mode}
+            onChange={(e) => set("endWarnMode", e.target.value)}
+            className="w-32 shrink-0 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1 text-sm text-neutral-200"
+          >
+            {END_WARN_MODES.map((m) => (
+              <option key={m} value={m}>
+                {t(m === "percent" ? "endWarnModePercent" : "endWarnModeSeconds")}
+              </option>
+            ))}
+          </select>
+        </label>
+        {structure.endWarn.mode === "percent"
+          ? numberSelect(
+              "endWarnPercent",
+              t("endWarnValuePercent"),
+              [2, 5, 10, 15, 20],
+              structure.endWarn.percent
+            )
+          : numberSelect(
+              "endWarnSeconds",
+              t("endWarnValueSeconds"),
+              [10, 15, 20, 30, 45, 60, 90],
+              structure.endWarn.seconds
+            )}
       </div>
     ),
   };

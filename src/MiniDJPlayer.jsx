@@ -15,6 +15,12 @@ import {
   sanitizeSavedLoops,
 } from "./lib/cuePoints";
 import { ROLL_SIZES } from "./audio/loops";
+import {
+  BEND_RANGES,
+  DEFAULT_BEND_RANGE,
+  DEFAULT_PITCH_RANGE,
+  PITCH_RANGES,
+} from "./lib/constants";
 import Deck from "./components/Deck";
 import CentralMeters from "./components/CentralMeters";
 import Mixer from "./components/Mixer";
@@ -24,14 +30,40 @@ import ConfigDialog from "./components/ConfigDialog";
 import UpdateToast from "./components/UpdateToast";
 import { useI18n } from "./i18n/context";
 import { buildWavePalette, resolveWaveColors } from "./lib/waveColors";
+import { resolveStructurePrefs } from "./lib/structurePrefs";
+import { sanitizeStructure } from "./audio/structure";
 import { ERRORS, logError } from "./lib/log";
 
-const PITCH_RANGES = [8, 16, 50];
+
 const CONFIG_KEY = "mini-dj-config";
 
 // Teclas del loop roll, en el mismo orden que ROLL_SIZES (1/8 … 4 beats):
 // de izquierda a derecha, loops cada vez más largos.
 const ROLL_KEYS = ["KeyA", "KeyS", "KeyD", "KeyF", "KeyG", "KeyH"];
+
+// ¿Ha cambiado algo de la estructura que merezca escribir en IndexedDB?
+// Los tramos se comparan por sus límites: son los mismos números que se
+// guardaron, no hay redondeos de por medio.
+function sameStructure(a, b) {
+  if (!a || !b) return a === b;
+  if (
+    a.phraseSize !== b.phraseSize ||
+    a.phraseOffset !== b.phraseOffset ||
+    a.detectedOffset !== b.detectedOffset ||
+    Boolean(a.manual) !== Boolean(b.manual) ||
+    Boolean(a.confident) !== Boolean(b.confident) ||
+    a.sections?.length !== b.sections?.length
+  ) {
+    return false;
+  }
+  return a.sections.every(
+    (s, i) =>
+      s.start === b.sections[i].start &&
+      s.end === b.sections[i].end &&
+      Boolean(s.kick) === Boolean(b.sections[i].kick)
+  );
+}
+
 
 export default function MiniDJMixer() {
   const { t } = useI18n();
@@ -116,6 +148,23 @@ export default function MiniDJMixer() {
 
   // Modo de visualización de los VU: LED por defecto, como una mesa de verdad
   const vuMode = config.vuMode === "continuous" ? "continuous" : "led";
+
+  // Rango del fader de pitch y cuánto estira el bend: se ajustan en ⚙ y valen
+  // para los dos decks. El rango es el de PARTIDA: el sync puede ensancharlo
+  // por su cuenta si necesita más recorrido, y eso no toca la configuración.
+  const configPitchRange = PITCH_RANGES.includes(Number(config.pitchRange))
+    ? Number(config.pitchRange)
+    : DEFAULT_PITCH_RANGE;
+  const bendRange = BEND_RANGES.includes(Number(config.bendRange))
+    ? Number(config.bendRange)
+    : DEFAULT_BEND_RANGE;
+
+  useEffect(() => {
+    setRangeA(configPitchRange);
+    setRangeB(configPitchRange);
+    setPitchPctA((p) => Math.max(-configPitchRange, Math.min(configPitchRange, p)));
+    setPitchPctB((p) => Math.max(-configPitchRange, Math.min(configPitchRange, p)));
+  }, [configPitchRange]);
 
   useEffect(() => {
     try {
@@ -420,6 +469,31 @@ export default function MiniDJMixer() {
     );
   }, []);
 
+  // Estructura de la pista analizada en el deck: se guarda en su fila para no
+  // volver a calcularla nunca más. Lo que el usuario haya ajustado a mano
+  // (structure.manual) viaja dentro y el análisis de fondo no lo toca.
+  const onStructure = useCallback((side, structure) => {
+    const loaded = deckTracksRef.current[side];
+    if (!loaded) return;
+    const clean = sanitizeStructure(structure);
+    if (!clean) return;
+    setTracks((prev) =>
+      prev.map((t) => {
+        if (t.id !== loaded.id) return t;
+        if (sameStructure(t.structure, clean)) return t;
+        const updated = { ...t, structure: clean };
+        storeTrack(updated);
+        return updated;
+      })
+    );
+  }, []);
+
+  // Tamaño de frase: el selector rápido del deck y el del diálogo ⚙ son el
+  // MISMO ajuste visto desde dos sitios.
+  const onPhraseSize = useCallback((n) => {
+    setConfig((prev) => ({ ...prev, phraseSize: n }));
+  }, []);
+
   // Pista cargada desde el propio deck (📂): ya no es la de la lista, así que
   // se suelta el vínculo y su BPM y sus cues no acaban en la fila de otra.
   const onLocalLoad = useCallback((side) => {
@@ -716,6 +790,9 @@ export default function MiniDJMixer() {
     return null;
   }, [playing, deckKeys, lastStarted]);
 
+  // Ajustes del indicador de estructura y del aviso de fin de pista
+  const structurePrefs = useMemo(() => resolveStructurePrefs(config), [config]);
+
   // Paleta de la onda: se reconstruye solo al cambiar de preset o de color
   const wavePalette = useMemo(
     () => buildWavePalette(resolveWaveColors(config)),
@@ -744,7 +821,11 @@ export default function MiniDJMixer() {
         />
 
         {/* Decks */}
-        <div className="grid lg:grid-cols-3 gap-4 sm:gap-6 [&>*]:min-w-0">
+        {/* El mixer ocupa lo que necesita y los dos decks se reparten el
+            resto a partes iguales. Con tres columnas iguales, la fila de
+            herramientas del deck se quedaba en 458 px y las cajas de arriba
+            (hot cues + rejilla + estructura) no cabían en una línea. */}
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-4 sm:gap-6 [&>*]:min-w-0">
           <Deck
             ref={setDeckRefA}
             colorClass="from-cyan-500/20 to-transparent"
@@ -757,7 +838,7 @@ export default function MiniDJMixer() {
             pitchPct={pitchPctA}
             setPitchPct={setPitchPct}
             pitchRange={rangeA}
-            setPitchRange={setPitchRange}
+            bendRange={bendRange}
             keyLock={keyLockA}
             setKeyLock={setKeyLock}
             onAttachEl={onAttachEl}
@@ -771,6 +852,10 @@ export default function MiniDJMixer() {
             onPlayingChange={onPlayingChange}
             onTrackMeta={onTrackMeta}
             onCues={onCues}
+            onStructure={onStructure}
+            onPhraseSize={onPhraseSize}
+            structurePrefs={structurePrefs}
+            showKey={config.showKey !== false}
             onLocalLoad={onLocalLoad}
             wavePalette={wavePalette}
             externalTrack={deckTracks.A}
@@ -800,7 +885,7 @@ export default function MiniDJMixer() {
             pitchPct={pitchPctB}
             setPitchPct={setPitchPct}
             pitchRange={rangeB}
-            setPitchRange={setPitchRange}
+            bendRange={bendRange}
             keyLock={keyLockB}
             setKeyLock={setKeyLock}
             onAttachEl={onAttachEl}
@@ -814,6 +899,10 @@ export default function MiniDJMixer() {
             onPlayingChange={onPlayingChange}
             onTrackMeta={onTrackMeta}
             onCues={onCues}
+            onStructure={onStructure}
+            onPhraseSize={onPhraseSize}
+            structurePrefs={structurePrefs}
+            showKey={config.showKey !== false}
             onLocalLoad={onLocalLoad}
             wavePalette={wavePalette}
             externalTrack={deckTracks.B}
